@@ -43,6 +43,7 @@ export const $container = Symbol('container');
 export const $canvas = Symbol('canvas');
 export const $scene = Symbol('scene');
 export const $needsRender = Symbol('needsRender');
+export const $needsShadowUpdate = Symbol('needsShadowUpdate');
 export const $tick = Symbol('tick');
 export const $onModelLoad = Symbol('onModelLoad');
 export const $onResize = Symbol('onResize');
@@ -293,6 +294,10 @@ export default class ModelViewerElementBase extends UpdatingElement {
 
   [$needsRender]() {
     this[$scene].isDirty = true;
+  }
+
+  [$needsShadowUpdate]() {
+    this[$scene].updateStaticShadow();
   }
 
   [$onModelLoad](_event: any) {

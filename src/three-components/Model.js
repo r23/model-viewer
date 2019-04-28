@@ -58,6 +58,10 @@ export default class Model extends Object3D {
     return !!this.modelContainer.children.length;
   }
 
+  hasAnimations() {
+    return this.animations !== null && this.animations.length > 0;
+  }
+
   applyEnvironmentMap(map) {
     // Note that unlit models (using MeshBasicMaterial) should not apply
     // an environment map, even though `map` is the currently configured

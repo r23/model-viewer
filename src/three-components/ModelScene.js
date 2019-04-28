@@ -347,6 +347,10 @@ export default class ModelScene extends Scene {
       return;
     }
 
+    if (this.model.hasAnimations() && this.shadow.visible === false) {
+      return;
+    }
+
     // Remove and cache the current pivot rotation so that the shadow's
     // capture is unrotated so it can be freely rotated when applied
     // as a texture.

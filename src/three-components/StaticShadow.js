@@ -31,6 +31,8 @@ const DEFAULT_CONFIG = {
 
 const shadowGeneratorMaterial = new MeshBasicMaterial({
   color: 0x000000,
+  morphTargets: true, // TODO
+  skinning: true, // TODO
 });
 
 const shadowTextureMaterial = new MeshBasicMaterial({
@@ -76,7 +78,7 @@ export default class StaticShadow extends Mesh {
 
     this.material.opacity =
         BASE_SHADOW_OPACITY * (intensityIsNumber ? intensity : 0.0);
-    
+
     this.visible = this.material.opacity > 0;
   }
 

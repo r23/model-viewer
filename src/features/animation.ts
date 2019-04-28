@@ -15,7 +15,7 @@
 
 import {property} from 'lit-element';
 
-import ModelViewerElementBase, {$needsRender, $onModelLoad, $scene, $tick, $updateSource} from '../model-viewer-base.js';
+import ModelViewerElementBase, {$needsRender, $needsShadowUpdate, $onModelLoad, $scene, $tick, $updateSource} from '../model-viewer-base.js';
 import {Constructor} from '../utils.js';
 
 const MILLISECONDS_PER_SECOND = 1000.0
@@ -98,6 +98,7 @@ export const AnimationMixin =
               const {model} = (this as any)[$scene];
               model.updateAnimation(delta / MILLISECONDS_PER_SECOND);
 
+              this[$needsShadowUpdate]();
               this[$needsRender]();
             }
 
@@ -134,6 +135,7 @@ export const AnimationMixin =
               // the model updates to the first frame of the new animation
               if (this[$paused]) {
                 model.updateAnimation(0);
+                this[$needsShadowUpdate]();
                 this[$needsRender]();
               }
             }
