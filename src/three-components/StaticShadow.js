@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import {Color, Mesh, MeshBasicMaterial, MultiplyBlending, OrthographicCamera, PlaneGeometry, RGBAFormat, ShaderMaterial, UniformsUtils, Vector3, WebGLRenderTarget} from 'three';
+import {Color, Mesh, MeshBasicMaterial, MultiplyBlending, OrthographicCamera, PlaneBufferGeometry, RGBAFormat, ShaderMaterial, UniformsUtils, Vector3, WebGLRenderTarget} from 'three';
 
 const $camera = Symbol('camera');
 const $renderTarget = Symbol('renderTarget');
@@ -52,7 +52,7 @@ export default class StaticShadow extends Mesh {
    * Create a shadow mesh.
    */
   constructor() {
-    const geometry = new PlaneGeometry(1, 1);
+    const geometry = new PlaneBufferGeometry(1, 1);
     geometry.rotateX(-Math.PI / 2);
 
     super(geometry, shadowTextureMaterial.clone());
