@@ -16,7 +16,7 @@
 import {property} from 'lit-element';
 import {PerspectiveCamera, Spherical} from 'three';
 
-import {deserializeSpherical} from '../conversions.js';
+import {deserializeAngle, deserializeSpherical} from '../conversions.js';
 import ModelViewerElementBase, {$ariaLabel, $needsRender, $onModelLoad, $onResize, $scene, $tick} from '../model-viewer-base.js';
 import {FRAMED_HEIGHT} from '../three-components/ModelScene.js';
 import {SmoothControls} from '../three-components/SmoothControls.js';
@@ -30,6 +30,7 @@ export interface SphericalPosition {
 
 
 const DEFAULT_CAMERA_ORBIT = '0deg 75deg auto';
+const DEFAULT_CAMERA_FOV = '45deg';
 
 const HALF_PI = Math.PI / 2.0;
 const THIRD_PI = Math.PI / 3.0;
@@ -81,6 +82,10 @@ export const ControlsMixin = (ModelViewerElement:
         @property(
             {type: String, attribute: 'camera-orbit', hasChanged: () => true})
         cameraOrbit: string = DEFAULT_CAMERA_ORBIT;
+
+        @property(
+          {type: String, attribute: 'camera-FOV', hasChanged: () => true})
+        cameraFOV: string = DEFAULT_CAMERA_FOV;
 
         @property({type: Number, attribute: 'interaction-prompt-threshold'})
         interactionPromptThreshold: number =
@@ -194,6 +199,12 @@ export const ControlsMixin = (ModelViewerElement:
             }
 
             controls.setOrbit(theta, phi, radius as number);
+          }
+
+          if (changedProperties.has('cameraFOV')) {
+            // this[$orbitCamera].fov = ThreeMath.radToDeg(
+              deserializeAngle(this.cameraFOV);
+            // this[$orbitCamera].updateProjectionMatrix();
           }
         }
 
