@@ -29,13 +29,8 @@ const DEFAULT_CONFIG = {
   textureHeight: 512,
 };
 
-const shadowGeneratorMaterial = new MeshBasicMaterial({
-  color: 0x000000,
-  morphTargets: true, // TODO
-  skinning: true, // TODO
-});
-
 const shadowTextureMaterial = new MeshBasicMaterial({
+  color: 0x000000,
   transparent: true,
   opacity: BASE_SHADOW_OPACITY,
 });
@@ -106,7 +101,6 @@ export default class StaticShadow extends Mesh {
     config = Object.assign({}, config, DEFAULT_CONFIG);
 
     renderer.setClearAlpha(0);
-    scene.overrideMaterial = shadowGeneratorMaterial;
     scene.background = null;
 
     // Update render target size if necessary
@@ -152,7 +146,6 @@ export default class StaticShadow extends Mesh {
     this.material.needsUpdate = true;
 
     // Reset the values on the renderer and scene
-    scene.overrideMaterial = userSceneOverrideMaterial;
     scene.background = userSceneBackground;
     renderer.setClearAlpha(userClearAlpha);
     renderer.setRenderTarget(userRenderTarget);
