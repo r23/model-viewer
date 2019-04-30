@@ -342,6 +342,10 @@ export default class ModelScene extends Scene {
    * Called to update the shadow rendering when the room or model changes.
    */
   updateStaticShadow() {
+    if (this.isVisible === false) {
+      return;
+    }
+
     if (!this.model.hasModel() || this.model.size.length() === 0) {
       this.pivot.remove(this.shadow);
       return;
