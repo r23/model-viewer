@@ -32,7 +32,8 @@ import {customElement, html, internalProperty, query} from 'lit-element';
 import * as color from 'ts-closure-library/lib/color/color';  // from //third_party/javascript/closure/color
 
 import {TextureInfo} from '../../../../model-viewer/lib/features/scene-graph/texture-info.js';
-import {AlphaMode, GLTF} from '../../../../model-viewer/lib/three-components/gltf-instance/gltf-2.0.js';
+import {AlphaMode} from '../../../../model-viewer/lib/three-components/gltf-instance/gltf-2.0.js';
+import {GLTF, TextureInfo as GLTFTextureInfo} from '../../../../model-viewer/lib/three-components/gltf-instance/gltf-defaulted';
 import {reduxStore} from '../../space_opera_base.js';
 import {State} from '../../types.js';
 import {ConnectedLitElement} from '../connected_lit_element/connected_lit_element.js';
@@ -42,7 +43,7 @@ import {CheckboxElement} from '../shared/checkbox/checkbox.js';
 import {ColorPicker} from '../shared/color_picker/color_picker.js';
 import {Dropdown} from '../shared/dropdown/dropdown.js';
 import {SliderWithInputElement} from '../shared/slider_with_input/slider_with_input.js';
-import {TexturePicker} from '../shared/texture_picker/texture_picker.js';
+import {FileDetails, TexturePicker} from '../shared/texture_picker/texture_picker.js';
 import {ALPHA_BLEND_MODES} from '../utils/gltf_constants.js';
 import {checkFinite} from '../utils/reducer_utils.js';
 
@@ -94,12 +95,9 @@ export class MaterialPanel extends ConnectedLitElement {
       return;
     }
 
-    // If a new model is loaded, don't interpolate material
     const gltf = model.originalGltf;
     if (this.originalGltf !== gltf) {
-      this.isNewModel = true;
       this.originalGltf = gltf;
-      this.selectedMaterialIndex = 0;
       if (model.thumbnailsById != null) {
         this.thumbnailsById = new Map(model.thumbnailsById);
         this.thumbnailIds = [];
@@ -108,6 +106,10 @@ export class MaterialPanel extends ConnectedLitElement {
           this.thumbnailIds.push(id);
           this.thumbnailUrls.push(thumbnail.objectUrl);
         }
+        // If a new model is loaded, don't interpolate material
+        this.isNewModel = true;
+        this.selectedMaterialIndex = 0;
+        this.isNewModel = false;
       }
     }
   }
@@ -117,7 +119,7 @@ export class MaterialPanel extends ConnectedLitElement {
   }
 
   getOriginalMaterial() {
-    return this.originalGltf!.materials![this.selectedMaterialIndex];
+    return this.originalGltf!.materials[this.selectedMaterialIndex];
   }
 
   getOriginalTextureId(index: number) {
@@ -244,7 +246,6 @@ export class MaterialPanel extends ConnectedLitElement {
     if (!this.isNewModel && !this.isTesting && !this.isInterpolating) {
       this.interpolateMaterial();
     }
-    this.isNewModel = false;
   }
 
   renderSelectMaterialTab() {
@@ -378,19 +379,33 @@ export class MaterialPanel extends ConnectedLitElement {
     const texture = textureId != null ?
         this.thumbnailsById.get(textureId)?.texture :
         undefined;
-    textureInfo.setTexture(texture as any ?? null);
+    textureInfo.setTexture(texture ?? null);
     reduxStore.dispatch(dispatchModelDirty());
   }
 
-  async onTextureUpload(uri: string, textureInfo: TextureInfo) {
-    if (this.thumbnailsById.has(uri)) {
+  revertTexture(
+      texturePicker: TexturePicker, textureInfo: GLTFTextureInfo|undefined) {
+    if (textureInfo == null) {
+      texturePicker.selectedIndex = undefined;
+    } else {
+      const id = this.getOriginalTextureId(textureInfo.index);
+      texturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
+    }
+  }
+
+  async onTextureUpload(
+      detail: FileDetails, texturePicker: TexturePicker,
+      textureInfo: TextureInfo) {
+    const {url, type} = detail;
+    if (this.thumbnailsById.has(url)) {
       console.log('URL collision! Texture not updated.');
       return;
     }
-    const texture = await getModelViewer()?.createTexture(uri);
+    const texture = await getModelViewer()?.createTexture(url, type);
     if (texture == null) {
       return;
     }
+
     textureInfo.setTexture(texture);
     const id = await pushThumbnail(this.thumbnailsById, textureInfo);
     // Trigger async panel update / render
@@ -400,6 +415,7 @@ export class MaterialPanel extends ConnectedLitElement {
       // Trigger async texture_picker update / render
       this.thumbnailUrls = [...this.thumbnailUrls];
       this.thumbnailUrls.push(this.thumbnailsById.get(id)!.objectUrl);
+      texturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
     }
     reduxStore.dispatch(dispatchModelDirty());
     this.dispatchEvent(new CustomEvent('texture-upload-complete'));
@@ -411,9 +427,11 @@ export class MaterialPanel extends ConnectedLitElement {
         this.getMaterial().pbrMetallicRoughness.baseColorTexture);
   }
 
-  onBaseColorTextureUpload(event: CustomEvent) {
+  onBaseColorTextureUpload(event: CustomEvent<FileDetails>) {
     this.onTextureUpload(
-        event.detail, this.getMaterial().pbrMetallicRoughness.baseColorTexture);
+        event.detail,
+        this.baseColorTexturePicker,
+        this.getMaterial().pbrMetallicRoughness.baseColorTexture);
   }
 
   onMetallicRoughnessTextureChange() {
@@ -422,9 +440,10 @@ export class MaterialPanel extends ConnectedLitElement {
         this.getMaterial().pbrMetallicRoughness.metallicRoughnessTexture);
   }
 
-  onMetallicRoughnessTextureUpload(event: CustomEvent) {
+  onMetallicRoughnessTextureUpload(event: CustomEvent<FileDetails>) {
     this.onTextureUpload(
         event.detail,
+        this.metallicRoughnessTexturePicker,
         this.getMaterial().pbrMetallicRoughness.metallicRoughnessTexture);
   }
 
@@ -433,8 +452,11 @@ export class MaterialPanel extends ConnectedLitElement {
         this.selectedNormalTextureId, this.getMaterial().normalTexture);
   }
 
-  onNormalTextureUpload(event: CustomEvent) {
-    this.onTextureUpload(event.detail, this.getMaterial().normalTexture);
+  onNormalTextureUpload(event: CustomEvent<FileDetails>) {
+    this.onTextureUpload(
+        event.detail,
+        this.normalTexturePicker,
+        this.getMaterial().normalTexture);
   }
 
   onEmissiveTextureChange() {
@@ -442,8 +464,11 @@ export class MaterialPanel extends ConnectedLitElement {
         this.selectedEmissiveTextureId, this.getMaterial().emissiveTexture);
   }
 
-  onEmissiveTextureUpload(event: CustomEvent) {
-    this.onTextureUpload(event.detail, this.getMaterial().emissiveTexture);
+  onEmissiveTextureUpload(event: CustomEvent<FileDetails>) {
+    this.onTextureUpload(
+        event.detail,
+        this.emissiveTexturePicker,
+        this.getMaterial().emissiveTexture);
   }
 
   onEmissiveFactorChanged() {
@@ -456,8 +481,11 @@ export class MaterialPanel extends ConnectedLitElement {
         this.selectedOcclusionTextureId, this.getMaterial().occlusionTexture);
   }
 
-  onOcclusionTextureUpload(event: CustomEvent) {
-    this.onTextureUpload(event.detail, this.getMaterial().occlusionTexture);
+  onOcclusionTextureUpload(event: CustomEvent<FileDetails>) {
+    this.onTextureUpload(
+        event.detail,
+        this.occlusionTexturePicker,
+        this.getMaterial().occlusionTexture);
   }
 
   onAlphaModeSelect() {
@@ -477,72 +505,68 @@ export class MaterialPanel extends ConnectedLitElement {
   }
 
   revertMetallicRoughnessTexture() {
-    const texture = this.getOriginalMaterial()
-                        .pbrMetallicRoughness!.metallicRoughnessTexture;
-    const id = this.getOriginalTextureId(texture!.index);
-    this.metallicRoughnessTexturePicker.selectedIndex =
-        this.thumbnailIds.indexOf(id);
+    this.revertTexture(
+        this.metallicRoughnessTexturePicker,
+        this.getOriginalMaterial()
+            .pbrMetallicRoughness.metallicRoughnessTexture);
     this.onMetallicRoughnessTextureChange();
   }
 
   revertMetallicFactor() {
     const factor =
-        this.getOriginalMaterial().pbrMetallicRoughness!.metallicFactor!;
+        this.getOriginalMaterial().pbrMetallicRoughness.metallicFactor;
     this.metallicFactorSlider.value = factor;
     this.onMetallicChange();
   }
 
   revertRoughnessFactor() {
     const factor =
-        this.getOriginalMaterial().pbrMetallicRoughness!.roughnessFactor!;
+        this.getOriginalMaterial().pbrMetallicRoughness.roughnessFactor;
     this.roughnessFactorSlider.value = factor;
     this.onRoughnessChange();
   }
 
   revertBaseColorFactor() {
     const factor =
-        this.getOriginalMaterial().pbrMetallicRoughness!.baseColorFactor!;
+        this.getOriginalMaterial().pbrMetallicRoughness.baseColorFactor!;
     this.baseColorPicker.selectedColorHex = this.rgbToHex(factor);
     this.onBaseColorChange();
   }
 
   revertBaseColorTexture() {
-    const texture =
-        this.getOriginalMaterial().pbrMetallicRoughness!.baseColorTexture;
-    const id = this.getOriginalTextureId(texture!.index);
-    this.baseColorTexturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
+    this.revertTexture(
+        this.baseColorTexturePicker,
+        this.getOriginalMaterial().pbrMetallicRoughness.baseColorTexture);
     this.onBaseColorTextureChange();
   }
 
   revertNormalTexture() {
-    const texture = this.getOriginalMaterial().normalTexture;
-    const id = this.getOriginalTextureId(texture!.index);
-    this.normalTexturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
+    this.revertTexture(
+        this.normalTexturePicker, this.getOriginalMaterial().normalTexture);
     this.onNormalTextureChange();
   }
 
   revertEmissiveTexture() {
-    const texture = this.getOriginalMaterial().emissiveTexture;
-    const id = this.getOriginalTextureId(texture!.index);
-    this.emissiveTexturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
+    this.revertTexture(
+        this.emissiveTexturePicker, this.getOriginalMaterial().emissiveTexture);
     this.onEmissiveTextureChange();
   }
 
   revertEmissiveFactor() {
-    const factor = this.getOriginalMaterial().emissiveFactor!;
+    const factor = this.getOriginalMaterial().emissiveFactor;
     this.emissiveFactorPicker.selectedColorHex = this.rgbToHex(factor);
     this.onEmissiveFactorChanged();
   }
 
   revertOcclusionTexture() {
-    const texture = this.getOriginalMaterial().occlusionTexture;
-    const id = this.getOriginalTextureId(texture!.index);
-    this.occlusionTexturePicker.selectedIndex = this.thumbnailIds.indexOf(id);
+    this.revertTexture(
+        this.occlusionTexturePicker,
+        this.getOriginalMaterial().occlusionTexture);
     this.onOcclusionTextureChange();
   }
 
   revertAlphaCutoff() {
-    this.alphaCutoffSlider.value = this.getOriginalMaterial().alphaCutoff!;
+    this.alphaCutoffSlider.value = this.getOriginalMaterial().alphaCutoff;
     this.onAlphaCutoffChange();
   }
 
@@ -554,7 +578,7 @@ export class MaterialPanel extends ConnectedLitElement {
   }
 
   revertDoubleSided() {
-    const doubleSided = this.getOriginalMaterial().doubleSided!;
+    const doubleSided = this.getOriginalMaterial().doubleSided;
     this.doubleSidedCheckbox.checked = doubleSided;
     this.updateDoubleSided(doubleSided);
   }

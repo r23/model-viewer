@@ -14,13 +14,13 @@
  */
 
 import {property} from 'lit-element';
-import {Euler, MeshStandardMaterial, RepeatWrapping, sRGBEncoding, Texture, TextureLoader} from 'three';
+import {Euler, MeshStandardMaterial, RepeatWrapping, RGBFormat, sRGBEncoding, Texture, TextureLoader} from 'three';
 import {GLTFExporter, GLTFExporterOptions} from 'three/examples/jsm/exporters/GLTFExporter';
 
 import ModelViewerElementBase, {$needsRender, $onModelLoad, $renderer, $scene} from '../model-viewer-base.js';
 import {normalizeUnit} from '../styles/conversions.js';
 import {NumberNode, parseExpressions} from '../styles/parsers.js';
-import {GLTF} from '../three-components/gltf-instance/gltf-2.0.js';
+import {GLTF} from '../three-components/gltf-instance/gltf-defaulted.js';
 import {ModelViewerGLTFInstance} from '../three-components/gltf-instance/ModelViewerGLTFInstance.js';
 import GLTFExporterMaterialsVariantsExtension from '../three-components/gltf-instance/VariantMaterialExporterPlugin';
 import {Constructor} from '../utilities.js';
@@ -37,6 +37,7 @@ const $model = Symbol('model');
 const $variants = Symbol('variants');
 const $getOnUpdateMethod = Symbol('getOnUpdateMethod');
 const $textureLoader = Symbol('textureLoader');
+const $originalGltfJson = Symbol('originalGltfJson');
 
 interface SceneExportOptions {
   binary?: boolean, trs?: boolean, onlyVisible?: boolean, embedImages?: boolean,
@@ -50,9 +51,9 @@ export interface SceneGraphInterface {
   readonly availableVariants: Array<string>;
   orientation: string;
   scale: string;
-  readonly originalGltfJson: GLTF|undefined;
+  readonly originalGltfJson: GLTF|null;
   exportScene(options?: SceneExportOptions): Promise<Blob>;
-  createTexture(uri: string): Promise<ModelViewerTexture|null>;
+  createTexture(uri: string, type?: string): Promise<ModelViewerTexture|null>;
 }
 
 /**
@@ -66,6 +67,7 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$currentGLTF]: ModelViewerGLTFInstance|null = null;
     protected[$variants]: Array<string> = [];
     private[$textureLoader] = new TextureLoader();
+    private[$originalGltfJson]: GLTF|null = null;
 
     @property({type: String, attribute: 'variant-name'})
     variantName: string|undefined = undefined;
@@ -90,7 +92,7 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
      * changes to the scene-graph, nor will editing it have any effect.
      */
     get originalGltfJson() {
-      return JSON.parse(JSON.stringify(this[$currentGLTF]?.parser.json));
+      return this[$originalGltfJson];
     }
 
     /**
@@ -111,7 +113,8 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
       };
     }
 
-    async createTexture(uri: string): Promise<ModelViewerTexture|null> {
+    async createTexture(uri: string, type: string = 'image/png'):
+        Promise<ModelViewerTexture|null> {
       const currentGLTF = this[$currentGLTF];
       const texture: Texture = await new Promise<Texture>(
           (resolve) => this[$textureLoader].load(uri, resolve));
@@ -123,12 +126,19 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
       texture.flipY = false;
+      // This hack is because GLTFExporter checks if format is RGB vs RGBA to
+      // decide if it should save as JPEG vs PNG. However, TextureLoader sets
+      // format based on if the url ends in .jpg, which does not work for an
+      // ObjectURL like we're passing here. So, to keep from inflating all JPEGs
+      // to PNGs, we allow the user of the API to specify the type.
+      if (type === 'image/jpeg') {
+        texture.format = RGBFormat;
+      }
 
       return new ModelViewerTexture(this[$getOnUpdateMethod](), texture);
     }
 
-
-    updated(changedProperties: Map<string, any>) {
+    async updated(changedProperties: Map<string, any>) {
       super.updated(changedProperties);
 
       if (changedProperties.has('variantName')) {
@@ -139,21 +149,19 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
           return;
         }
 
-        const updatedMaterialsPromise =
-            threeGLTF.correlatedSceneGraph.loadVariant(
-                variantName!, this[$getOnUpdateMethod]);
+        const updatedMaterials =
+            await threeGLTF.correlatedSceneGraph.loadVariant(variantName!);
         const {gltf, gltfElementMap} = threeGLTF.correlatedSceneGraph;
 
-        updatedMaterialsPromise.then(updatedMaterials => {
-          for (const index of updatedMaterials) {
-            const material = gltf.materials![index];
-            this[$model]!.materials[index] = new Material(
-                this[$getOnUpdateMethod],
-                gltf,
-                material,
-                gltfElementMap.get(material) as Set<MeshStandardMaterial>);
-          }
-        });
+        for (const index of updatedMaterials) {
+          const material = gltf.materials![index];
+          this[$model]!.materials[index] = new Material(
+              this[$getOnUpdateMethod](),
+              gltf,
+              material,
+              gltfElementMap.get(material) as Set<MeshStandardMaterial>);
+        }
+        this[$needsRender]();
       }
 
       if (changedProperties.has('orientation') ||
@@ -195,9 +203,10 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
 
         if (correlatedSceneGraph != null &&
             currentGLTF !== this[$currentGLTF]) {
-          this[$model] = new Model(correlatedSceneGraph, () => {
-            this[$needsRender]();
-          });
+          this[$model] =
+              new Model(correlatedSceneGraph, this[$getOnUpdateMethod]());
+          this[$originalGltfJson] =
+              JSON.parse(JSON.stringify(correlatedSceneGraph.gltf));
         }
 
         // KHR_materials_variants extension spec:

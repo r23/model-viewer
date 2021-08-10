@@ -32,7 +32,7 @@ import {getBestPractices} from '../best_practices/reducer.js';
 import {arButtonCSS, progressBarCSS} from '../best_practices/styles.css.js';
 import {applyCameraEdits, Camera, INITIAL_CAMERA} from '../camera_settings/camera_state.js';
 import {dispatchCameraIsDirty, getCamera} from '../camera_settings/reducer.js';
-import {dispatchCameraControlsEnabled, dispatchEnvrionmentImage, getConfig} from '../config/reducer.js';
+import {dispatchAutoplayEnabled, dispatchCameraControlsEnabled, dispatchEnvrionmentImage, getConfig} from '../config/reducer.js';
 import {ConnectedLitElement} from '../connected_lit_element/connected_lit_element.js';
 import {dispatchAddHotspot, dispatchSetHotspots, dispatchUpdateHotspotMode, generateUniqueHotspotName, getHotspotMode, getHotspots} from '../hotspot_panel/reducer.js';
 import {HotspotConfig} from '../hotspot_panel/types.js';
@@ -53,14 +53,12 @@ import {dispatchGltfUrl, dispatchModel, getGltfUrl, renderCommonChildElements} f
 export class ModelViewerPreview extends ConnectedLitElement {
   static styles =
       [modelViewerPreviewStyles, hotspotStyles, arButtonCSS, progressBarCSS];
-  @query('model-viewer') readonly modelViewer?: ModelViewerElement;
+  @query('model-viewer') readonly modelViewer!: ModelViewerElement;
   @internalProperty() config: ModelViewerConfig = {};
   @internalProperty() hotspots: HotspotConfig[] = [];
   @internalProperty() camera: Camera = INITIAL_CAMERA;
   @internalProperty() addHotspotMode = false;
-  @internalProperty() autoplay?: boolean;
   @internalProperty() gltfUrl?: string;
-  @internalProperty() gltfError: string = '';
   @internalProperty() extraAttributes: any = {};
   @internalProperty() refreshButtonIsReady: boolean = false;
   @internalProperty() bestPractices?: BestPracticesState;
@@ -76,7 +74,6 @@ export class ModelViewerPreview extends ConnectedLitElement {
     this.camera = getCamera(state);
     this.config = getConfig(state);
     this.hotspots = getHotspots(state);
-    this.autoplay = getConfig(state).autoplay;
     this.extraAttributes = getExtraAttributes(state);
     this.refreshButtonIsReady = getRefreshable(state);
     this.bestPractices = getBestPractices(state);
@@ -96,10 +93,6 @@ export class ModelViewerPreview extends ConnectedLitElement {
   }
 
   private async onGltfUrlChanged() {
-    if (!this.modelViewer) {
-      throw new Error(`model-viewer element was not ready`);
-    }
-
     // Clear potential poster settings.
     if (this.modelViewer.reveal === 'interaction' ||
         this.modelViewer.reveal === 'manual') {
@@ -137,10 +130,7 @@ export class ModelViewerPreview extends ConnectedLitElement {
 
     // Add additional elements, editor specific.
     childElements.push(refreshMobileButton);
-    if (this.gltfError) {
-      childElements.push(html`<div class="ErrorText">Error loading glTF:<br/>${
-          this.gltfError}</div>`);
-    } else if (!hasModel) {
+    if (!hasModel) {
       childElements.push(
           html
           `<div class="HelpText">Drag a glTF or GLB here!<br/><small>And HDRs for lighting</small></div>`);
@@ -160,25 +150,10 @@ export class ModelViewerPreview extends ConnectedLitElement {
               cameraChange: () => {
                 this.onCameraChange();
               },
-              modelVisibility: () => {
-                this.onModelVisible();
-              },
-              // Other things can cause the animation to play/pause, like
-              // setting autoplay to true, so make sure we enforce what WE want
-              // after that.
-              play: () => {
-                this.enforcePlayAnimation();
-              },
-              pause: () => {
-                this.enforcePlayAnimation();
-              },
               click: (event: MouseEvent) => {
                 if (this.addHotspotMode) {
                   this.addHotspot(event);
                 }
-              },
-              error: (error: CustomEvent) => {
-                this.gltfError = error.detail;
               }
             },
             childElements)}`;
@@ -188,45 +163,27 @@ export class ModelViewerPreview extends ConnectedLitElement {
   private async onModelLoaded() {
     reduxStore.dispatch(await dispatchModel());
     // only update on poster reveal
-    if (this.modelViewer && this.modelViewer.reveal === 'interaction') {
+    if (this.modelViewer.reveal === 'interaction') {
       await this.onGltfUrlChanged();
     }
-    this.enforcePlayAnimation();
-    this.resolveLoad();
-  }
-
-  private onModelVisible() {
-    if (!this.modelViewer || !this.modelViewer.loaded) {
-      throw new Error('onModelVisible called before mv was loaded');
+    if (this.modelViewer.availableAnimations.length > 0) {
+      reduxStore.dispatch(dispatchAutoplayEnabled(true));
     }
+    this.resolveLoad();
   }
 
   private onCameraChange() {
     reduxStore.dispatch(dispatchCameraIsDirty());
   }
 
-  private enforcePlayAnimation() {
-    if (this.modelViewer && this.modelViewer.loaded) {
-      // Calling play with no animation name will result in the first animation
-      // getting played. Don't want that.
-      if (this.autoplay && this.config.animationName) {
-        this.modelViewer.play();
-      } else {
-        this.modelViewer.pause();
-      }
-    }
-  }
-
   private addHotspot(event: MouseEvent) {
-    if (!this.modelViewer) {
-      throw new Error('Model Viewer doesn\'t exist');
-    }
     const rect = this.modelViewer.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const positionAndNormal = this.modelViewer.positionAndNormalFromPoint(x, y);
     if (!positionAndNormal) {
-      throw new Error('invalid click position');
+      console.log('Click was not on model, no hotspot added.');
+      return;
     }
     reduxStore.dispatch(dispatchAddHotspot({
       name: generateUniqueHotspotName(),

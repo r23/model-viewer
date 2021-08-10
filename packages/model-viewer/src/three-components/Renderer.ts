@@ -16,7 +16,9 @@
 import {ACESFilmicToneMapping, Event, EventDispatcher, GammaEncoding, PCFSoftShadowMap, WebGLRenderer} from 'three';
 import {RoughnessMipmapper} from 'three/examples/jsm/utils/RoughnessMipmapper';
 
-import {$canvas, $tick, $updateSize} from '../model-viewer-base.js';
+import {$updateEnvironment} from '../features/environment.js';
+import {ModelViewerGlobalConfig} from '../features/loading.js';
+import ModelViewerElementBase, {$canvas, $tick, $updateSize} from '../model-viewer-base.js';
 import {clamp, isDebugMode, resolveDpr} from '../utilities.js';
 
 import {ARRenderer} from './ARRenderer.js';
@@ -27,6 +29,7 @@ import {ModelScene} from './ModelScene.js';
 import TextureUtils from './TextureUtils.js';
 
 export interface RendererOptions {
+  powerPreference: string;
   debug?: boolean;
 }
 
@@ -43,6 +46,8 @@ const MAX_AVG_CHANGE_MS = 2;
 const SCALE_STEPS = [1, 0.79, 0.62, 0.5, 0.4, 0.31, 0.25];
 const DEFAULT_LAST_STEP = 3;
 
+export const DEFAULT_POWER_PREFERENCE: string = 'high-performance';
+
 /**
  * Registers canvases with Canvas2DRenderingContexts and renders them
  * all in the same WebGLRenderingContext, spitting out textures to apply
@@ -55,15 +60,35 @@ const DEFAULT_LAST_STEP = 3;
  * the texture.
  */
 export class Renderer extends EventDispatcher {
-  private static _singleton = new Renderer({debug: isDebugMode()});
+  private static _singleton = new Renderer({
+    powerPreference:
+        (((self as any).ModelViewerElement || {}) as ModelViewerGlobalConfig)
+            .powerPreference ||
+        DEFAULT_POWER_PREFERENCE,
+    debug: isDebugMode()
+  });
 
   static get singleton() {
     return this._singleton;
   }
 
   static resetSingleton() {
-    this._singleton.dispose();
-    this._singleton = new Renderer({debug: isDebugMode()});
+    const elements = this._singleton.dispose();
+    for (const element of elements) {
+      element.disconnectedCallback();
+    }
+
+    this._singleton = new Renderer({
+      powerPreference:
+          (((self as any).ModelViewerElement || {}) as ModelViewerGlobalConfig)
+              .powerPreference ||
+          DEFAULT_POWER_PREFERENCE,
+      debug: isDebugMode()
+    });
+
+    for (const element of elements) {
+      element.connectedCallback();
+    }
   }
 
   public threeRenderer!: WebGLRenderer;
@@ -104,21 +129,20 @@ export class Renderer extends EventDispatcher {
     this.lastStep = i - 1;
   }
 
-  constructor(options?: RendererOptions) {
+  constructor(options: RendererOptions) {
     super();
 
     this.dpr = resolveDpr();
 
     this.canvas3D = document.createElement('canvas');
     this.canvas3D.id = 'webgl-canvas';
-    this.canvas3D.addEventListener('webglcontextlost', this.onWebGLContextLost);
 
     try {
       this.threeRenderer = new WebGLRenderer({
         canvas: this.canvas3D,
         alpha: true,
         antialias: true,
-        powerPreference: 'high-performance' as WebGLPowerPreference,
+        powerPreference: options.powerPreference as WebGLPowerPreference,
         preserveDrawingBuffer: true
       });
       this.threeRenderer.autoClear = true;
@@ -129,8 +153,7 @@ export class Renderer extends EventDispatcher {
       this.threeRenderer.shadowMap.type = PCFSoftShadowMap;
       this.threeRenderer.shadowMap.autoUpdate = false;
 
-      this.debugger =
-          options != null && !!options.debug ? new Debugger(this) : null;
+      this.debugger = !!options.debug ? new Debugger(this) : null;
       this.threeRenderer.debug = {checkShaderErrors: !!this.debugger};
 
       // ACESFilmicToneMapping appears to be the most "saturated",
@@ -145,6 +168,10 @@ export class Renderer extends EventDispatcher {
         this.canRender ? new TextureUtils(this.threeRenderer) : null;
     this.roughnessMipmapper = new RoughnessMipmapper(this.threeRenderer);
     CachingGLTFLoader.initializeKTX2Loader(this.threeRenderer);
+
+    this.canvas3D.addEventListener('webglcontextlost', this.onWebGLContextLost);
+    this.canvas3D.addEventListener(
+        'webglcontextrestored', this.onWebGLContextRestored);
 
     this.updateRendererSize();
     this.lastTick = performance.now();
@@ -462,9 +489,13 @@ export class Renderer extends EventDispatcher {
     }
   }
 
-  dispose() {
+  dispose(): Array<ModelViewerElementBase> {
     if (this.textureUtils != null) {
       this.textureUtils.dispose();
+    }
+
+    if (this.roughnessMipmapper != null) {
+      this.roughnessMipmapper.dispose();
     }
 
     if (this.threeRenderer != null) {
@@ -474,14 +505,31 @@ export class Renderer extends EventDispatcher {
     this.textureUtils = null;
     (this as any).threeRenderer = null;
 
-    this.scenes.clear();
+    const elements = [];
+    for (const scene of this.scenes) {
+      elements.push(scene.element);
+    }
 
     this.canvas3D.removeEventListener(
         'webglcontextlost', this.onWebGLContextLost);
+    this.canvas3D.removeEventListener(
+        'webglcontextrestored', this.onWebGLContextRestored);
+
+    return elements;
   }
 
   onWebGLContextLost = (event: Event) => {
     this.dispatchEvent(
         {type: 'contextlost', sourceEvent: event} as ContextLostEvent);
+  };
+
+  onWebGLContextRestored = () => {
+    this.textureUtils?.dispose();
+    this.textureUtils = new TextureUtils(this.threeRenderer);
+    this.roughnessMipmapper = new RoughnessMipmapper(this.threeRenderer);
+    for (const scene of this.scenes) {
+      (scene.element as any)[$updateEnvironment]();
+    }
+    this.threeRenderer.shadowMap.needsUpdate = true;
   };
 }
