@@ -17,7 +17,6 @@
 
 import * as Redux from 'redux';  // from //third_party/javascript/redux:redux_closurized
 
-import {Camera, INITIAL_CAMERA} from './components/camera_settings/camera_state.js';
 import {HotspotConfig} from './components/hotspot_panel/types.js';
 import {EnvironmentImage, INITIAL_ENVIRONMENT_IMAGES} from './components/ibl_selector/types.js';
 import {MobileState} from './components/mobile_view/types.js';
@@ -37,6 +36,7 @@ export interface ModelViewerConfig {
   exposure?: number;  // Environment for hdr environment, used as ibl intensity
   poster?: string;    // Display an image before model finished loading
   reveal?: string;    // Controls when the model should be revealed
+  interactionPrompt?: string;
   shadowIntensity?: number;
   shadowSoftness?: number;
   maxCameraOrbit?: string;
@@ -47,6 +47,13 @@ export interface ModelViewerConfig {
   // This doesn't correspond to a modelviewer attribute, but ultimately MVC is
   // app state - not MV state.
   useEnvAsSkybox?: boolean;
+}
+
+export type ImageType = 'image/png'|'image/jpeg'|'image/webp';
+
+export interface PosterConfig {
+  height: number;
+  mimeType: ImageType;
 }
 
 interface HotspotsUIState {
@@ -61,7 +68,7 @@ export interface RelativeFilePathsState {
   iosName?: string|undefined;
   modelName?: string|undefined;
   environmentName?: string|undefined;
-  posterName?: string|undefined;
+  posterName: string|undefined;
 }
 
 export interface EnvironmentState {
@@ -83,8 +90,8 @@ export interface BestPracticesState {
 export interface ModelViewerSnippetState {
   arConfig: ArConfigState;
   bestPractices: BestPracticesState;
-  camera: Camera;
   config: ModelViewerConfig;
+  poster: PosterConfig;
   hotspots: HotspotConfig[];
   relativeFilePaths: RelativeFilePathsState;
   extraAttributes: any;
@@ -120,9 +127,9 @@ export const INITIAL_STATE: State = {
       arConfig: {},
       bestPractices: {progressBar: true, arButton: true, arPrompt: true},
       config: {},
+      poster: {height: 512, mimeType: 'image/webp'},
       hotspots: [],
-      camera: INITIAL_CAMERA,
-      relativeFilePaths: {},
+      relativeFilePaths: {posterName: 'poster.webp'},
       extraAttributes: {},
     },
   },

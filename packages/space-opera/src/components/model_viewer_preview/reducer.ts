@@ -16,21 +16,26 @@
  */
 
 import {TextureInfo} from '@google/model-viewer/lib/features/scene-graph/texture-info';
-import {ModelViewerElement} from '@google/model-viewer/lib/model-viewer';
 import {Image} from '@google/model-viewer/lib/three-components/gltf-instance/gltf-2.0.js';
 
 import {Action, BestPracticesState, State} from '../../types.js';
 import {renderARButton, renderARPrompt, renderProgressBar} from '../best_practices/render_best_practices.js';
-import {Camera} from '../camera_settings/camera_state.js';
 import {HotspotConfig} from '../hotspot_panel/types.js';
 import {ModelState, Thumbnail} from '../model_viewer_preview/types.js';
 import {renderHotspots} from '../utils/hotspot/render_hotspots.js';
-import {radToDeg} from '../utils/reducer_utils.js';
 
 const THUMBNAIL_SIZE = 256;
 
 export function getModelViewer() {
-  return document.querySelector('model-viewer-preview')?.modelViewer;
+  return document.querySelector('model-viewer-preview')!.modelViewer;
+}
+
+export async function getUpdatedModelViewer() {
+  const preview = document.querySelector('model-viewer-preview')!;
+  const viewer = preview.modelViewer;
+  await preview.updateComplete;
+  await viewer.updateComplete;
+  return viewer;
 }
 
 export function renderCommonChildElements(
@@ -50,19 +55,6 @@ export function renderCommonChildElements(
     childElements.push(renderARPrompt());
   }
   return childElements;
-}
-
-export function getCameraState(viewer: ModelViewerElement) {
-  const orbitRad = viewer.getCameraOrbit();
-  return {
-    orbit: {
-      thetaDeg: radToDeg(orbitRad.theta),
-      phiDeg: radToDeg(orbitRad.phi),
-      radius: orbitRad.radius
-    },
-    target: viewer.getCameraTarget(),
-    fieldOfViewDeg: viewer.getFieldOfView(),
-  } as Camera;
 }
 
 export async function downloadContents(url: string): Promise<ArrayBuffer> {

@@ -23,16 +23,15 @@ import {ifDefined} from 'lit-html/directives/if-defined';
 import {toastStyles} from '../../styles.css.js';
 import {ArConfigState, BestPracticesState, ModelViewerConfig, ModelViewerSnippetState} from '../../types.js';
 import {arButtonCSS, arPromptCSS, progressBarCSS} from '../best_practices/styles.css.js';
-import {applyCameraEdits, Camera, INITIAL_CAMERA} from '../camera_settings/camera_state.js';
 import {HotspotConfig, toVector3D} from '../hotspot_panel/types.js';
 import {renderCommonChildElements} from '../model_viewer_preview/reducer.js';
 import {styles as hotspotStyles} from '../utils/hotspot/hotspot.css.js';
 
 import {styles as mobileStyles} from './styles.css.js';
 import {EditorUpdates, MobilePacket, MobileSession, URLs} from './types.js';
-import {envToSession, getMobileOperatingSystem, getPingUrl, getRandomInt, getSessionUrl, getWithTimeout, gltfToSession, post, usdzToSession} from './utils.js';
+import {envToSession, getMobileOperatingSystem, getPingUrl, getRandomInt, getSessionUrl, getWithTimeout, gltfToSession, post, posterToSession, usdzToSession} from './utils.js';
 
-const TOAST_TIME = 7000;  // 7s
+const TOAST_TIME = 3000;  // 3s
 
 /**
  * The view loaded at /editor/view/?id=xyz
@@ -49,8 +48,9 @@ export class MobileView extends LitElement {
     arPromptCSS
   ];
 
-  @query('model-viewer') readonly modelViewer?: ModelViewerElement;
+  @query('model-viewer') readonly modelViewer!: ModelViewerElement;
   @internalProperty() modelViewerUrl: string = '';
+  @internalProperty() posterUrl: string = '';
   @internalProperty() iosUrl: string = '';
   @internalProperty() currentBlob?: Blob;
   @internalProperty() usdzBlob?: Blob;
@@ -60,7 +60,6 @@ export class MobileView extends LitElement {
   @internalProperty() config: ModelViewerConfig = {};
   @internalProperty() arConfig: ArConfigState = {};
   @internalProperty() extraAttributes: any = {};
-  @internalProperty() camera: Camera = INITIAL_CAMERA;
   @internalProperty() hotspots: HotspotConfig[] = [];
   @internalProperty() bestPractices?: BestPracticesState;
   @internalProperty() envImageUrl: string = '';
@@ -95,14 +94,13 @@ export class MobileView extends LitElement {
     // Set all of the other relevant snippet information
     this.arConfig = snippet.arConfig;
     this.config = snippet.config;
-    this.camera = snippet.camera;
     this.extraAttributes = snippet.extraAttributes;
     this.bestPractices = snippet.bestPractices;
 
     // Send a new POST out for each scene-viewer button press
     if (snippet.arConfig.ar) {
       const arButton =
-          this.modelViewer?.shadowRoot!.getElementById('default-ar-button')!;
+          this.modelViewer.shadowRoot!.getElementById('default-ar-button')!;
       arButton.addEventListener('click', () => {
         try {
           if (this.sessionOs === 'iOS') {
@@ -138,6 +136,9 @@ export class MobileView extends LitElement {
   async waitForData(json: MobilePacket) {
     const updatedContent: EditorUpdates = json.updatedContent;
     this.overlay!.style.display = 'block';
+
+    this.posterUrl =
+        posterToSession(this.pipeId, this.sessionId, updatedContent.posterId);
 
     if (updatedContent.stateChanged) {
       this.updateState(json.snippet, json.urls);
@@ -175,6 +176,7 @@ export class MobileView extends LitElement {
   async fetchLoop() {
     const response = await getWithTimeout(this.sessionUrl);
     if (response.ok) {
+      this.modelViewer.showPoster();
       const json: MobilePacket = await response.json();
       this.initializeToast(json.updatedContent);
       setTimeout(() => {
@@ -199,7 +201,7 @@ export class MobileView extends LitElement {
   // scene-viewer. Subsequently, everytime scene-viewer is opened, we send the
   // POST again.
   async modelIsLoaded() {
-    this.currentBlob = await this.modelViewer!.exportScene();
+    this.currentBlob = await this.modelViewer.exportScene();
     try {
       await post(this.currentBlob, this.modelViewerUrl);
     } catch (error) {
@@ -217,7 +219,6 @@ export class MobileView extends LitElement {
 
   render() {
     const config = {...this.config};
-    applyCameraEdits(config, this.camera);
     const skyboxImage = (config.useEnvAsSkybox && this.editorUrls?.env) ?
         this.envImageUrl :
         undefined;
@@ -241,7 +242,7 @@ export class MobileView extends LitElement {
           environment-image=${ifDefined(this.envImageUrl)}
           skybox-image=${ifDefined(skyboxImage)}
           exposure=${ifDefined(config.exposure)}
-          poster=${ifDefined(config.poster)}
+          poster=${this.posterUrl}
           reveal=${ifDefined(config.reveal)}
           shadow-intensity=${ifDefined(config.shadowIntensity)}
           shadow-softness=${ifDefined(config.shadowSoftness)}
@@ -263,6 +264,16 @@ export class MobileView extends LitElement {
     </div>
     ${this.needIosSrc ? this.renderIosMessage() : html``}
     `;
+  }
+
+  updated() {
+    this.modelViewer.cameraOrbit = 'auto auto auto';
+    const {cameraOrbit} = this.config;
+    if (cameraOrbit) {
+      this.modelViewer.cameraOrbit = cameraOrbit.toString();
+    }
+    this.modelViewer.jumpCameraToGoal();
+    this.modelViewer.dismissPoster();
   }
 
   // Ping the editor
