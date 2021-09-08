@@ -173,8 +173,12 @@ export class SmoothControls extends EventDispatcher {
           'touchstart', this.onTouchStart, {passive: true});
       element.addEventListener('touchmove', this.onTouchMove, {passive: false});
 
+      element.addEventListener('touchend', this.onTouchEnd);
+
       this.element.style.cursor = 'grab';
       this._interactionEnabled = true;
+
+      this.updateTouchActionStyle();
     }
   }
 
@@ -182,7 +186,7 @@ export class SmoothControls extends EventDispatcher {
     if (this._interactionEnabled === true) {
       const {element} = this;
 
-      element.removeEventListener('mousemove', this.onMouseMove);
+      self.removeEventListener('mousemove', this.onMouseMove);
       element.removeEventListener('mousedown', this.onMouseDown);
       if (!this._disableZoom) {
         element.removeEventListener('wheel', this.onWheel);
@@ -192,11 +196,13 @@ export class SmoothControls extends EventDispatcher {
       element.removeEventListener('touchmove', this.onTouchMove);
 
       self.removeEventListener('mouseup', this.onMouseUp);
-      self.removeEventListener('touchend', this.onTouchEnd);
+      element.removeEventListener('touchend', this.onTouchEnd);
 
       element.style.cursor = '';
       this.touchMode = null;
       this._interactionEnabled = false;
+
+      this.updateTouchActionStyle();
     }
   }
 
@@ -215,6 +221,8 @@ export class SmoothControls extends EventDispatcher {
       } else {
         this.element.addEventListener('wheel', this.onWheel);
       }
+
+      this.updateTouchActionStyle();
     }
   }
 
@@ -426,6 +434,21 @@ export class SmoothControls extends EventDispatcher {
     this.moveCamera();
   }
 
+  updateTouchActionStyle() {
+    const {style} = this.element;
+
+    if (this._interactionEnabled) {
+      const {touchAction} = this._options;
+      if (this._disableZoom && touchAction !== 'none') {
+        style.touchAction = 'manipulation';
+      } else {
+        style.touchAction = touchAction!;
+      }
+    } else {
+      style.touchAction = '';
+    }
+  }
+
   private isStationary(): boolean {
     return this.goalSpherical.theta === this.spherical.theta &&
         this.goalSpherical.phi === this.spherical.phi &&
@@ -512,25 +535,26 @@ export class SmoothControls extends EventDispatcher {
   };
 
   private touchModeZoom: TouchMode = (event) => {
-    const {touches} = event;
-    if (this.lastTouches.length > 1 && touches.length > 1) {
+    const {targetTouches} = event;
+    if (this.lastTouches.length > 1 && targetTouches.length > 1) {
       const lastTouchDistance =
           this.twoTouchDistance(this.lastTouches[0], this.lastTouches[1]);
-      const touchDistance = this.twoTouchDistance(touches[0], touches[1]);
+      const touchDistance =
+          this.twoTouchDistance(targetTouches[0], targetTouches[1]);
       const deltaZoom =
           ZOOM_SENSITIVITY * (lastTouchDistance - touchDistance) / 10.0;
 
       this.userAdjustOrbit(0, 0, deltaZoom);
 
-      this.lastTouches = touches;
+      this.lastTouches = targetTouches;
     }
   };
   private touchModeRotate: TouchMode = (event) => {
-    const {touches} = event;
+    const {targetTouches} = event;
     const {touchAction} = this._options;
     if (!this.touchDecided && touchAction !== 'none') {
       this.touchDecided = true;
-      const {clientX, clientY} = touches[0];
+      const {clientX, clientY} = targetTouches[0];
       const dx = Math.abs(clientX - this.lastPointerPosition.clientX);
       const dy = Math.abs(clientY - this.lastPointerPosition.clientY);
       // If motion is mostly vertical, assume scrolling is the intent.
@@ -540,9 +564,9 @@ export class SmoothControls extends EventDispatcher {
         return;
       }
     }
-    this.handleSinglePointerMove(touches[0]);
+    this.handleSinglePointerMove(targetTouches[0]);
 
-    this.lastTouches = touches;
+    this.lastTouches = targetTouches;
   };
 
   private handleSinglePointerMove(pointer: Pointer) {
@@ -575,8 +599,7 @@ export class SmoothControls extends EventDispatcher {
 
   private onMouseDown = (event: MouseEvent) => {
     this.onPointerDown(() => {
-      const {element} = this;
-      element.addEventListener('mousemove', this.onMouseMove);
+      self.addEventListener('mousemove', this.onMouseMove);
       self.addEventListener('mouseup', this.onMouseUp, {once: true});
       this.handleSinglePointerDown(event);
     });
@@ -584,31 +607,37 @@ export class SmoothControls extends EventDispatcher {
 
   private onTouchStart = (event: TouchEvent) => {
     this.onPointerDown(() => {
-      if (event.touches.length === 1) {
-        self.addEventListener('touchend', this.onTouchEnd);
+      const {targetTouches, changedTouches, touches} = event;
+      if (targetTouches.length === changedTouches.length) {
+        this.touchMode = null;
         this.touchDecided = false;
       }
-      this.onTouchChange(event);
+
+      if (targetTouches.length === touches.length) {
+        this.onTouchChange(event);
+      }
     });
   };
 
   private onTouchChange(event: TouchEvent) {
-    const {touches} = event;
+    const {targetTouches} = event;
 
-    switch (touches.length) {
+    switch (targetTouches.length) {
       default:
       case 1:
         this.touchMode = this.touchModeRotate;
-        this.handleSinglePointerDown(touches[0]);
+        this.handleSinglePointerDown(targetTouches[0]);
         break;
       case 2:
-        this.touchMode = this._disableZoom || this.touchMode === null ?
+        this.touchMode = this._disableZoom ||
+                (this.touchDecided && this.touchMode === null) ?
             null :
             this.touchModeZoom;
+        this.touchDecided = true;
         break;
     }
 
-    this.lastTouches = touches;
+    this.lastTouches = targetTouches;
   }
 
   private handleSinglePointerDown(pointer: Pointer) {
@@ -627,17 +656,13 @@ export class SmoothControls extends EventDispatcher {
   }
 
   private onMouseUp = (_event: MouseEvent) => {
-    this.element.removeEventListener('mousemove', this.onMouseMove);
+    self.removeEventListener('mousemove', this.onMouseMove);
 
     this.onPointerUp();
   };
 
   private onTouchEnd = (event: TouchEvent) => {
-    if (event.touches.length === 0) {
-      self.removeEventListener('touchend', this.onTouchEnd);
-      this.touchMode = null;
-
-    } else if (this.touchMode !== null) {
+    if (event.targetTouches.length > 0 && this.touchMode !== null) {
       this.onTouchChange(event);
     }
 

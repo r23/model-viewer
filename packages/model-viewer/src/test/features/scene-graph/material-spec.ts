@@ -16,10 +16,11 @@
 import {MeshStandardMaterial, Texture as ThreeTexture} from 'three';
 
 import {$threeTexture} from '../../../features/scene-graph/image.js';
+import {$lazyLoadGLTFInfo} from '../../../features/scene-graph/material.js';
+import {Model} from '../../../features/scene-graph/model.js';
 import {Texture} from '../../../features/scene-graph/texture.js';
 import {$correlatedObjects} from '../../../features/scene-graph/three-dom-element.js';
 import {ModelViewerElement} from '../../../model-viewer.js';
-import {ALPHA_CUTOFF_OPAQUE} from '../../../three-components/gltf-instance/ModelViewerGLTFInstance.js';
 import {waitForEvent} from '../../../utilities.js';
 import {assetPath} from '../../helpers.js';
 
@@ -27,6 +28,7 @@ import {assetPath} from '../../helpers.js';
 
 const expect = chai.expect;
 
+const CUBES_GLTF_PATH = assetPath('models/cubes.gltf');
 const HELMET_GLB_PATH = assetPath(
     'models/glTF-Sample-Models/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb');
 const ALPHA_BLEND_MODE_TEST = assetPath(
@@ -165,13 +167,11 @@ suite('scene-graph/material', () => {
 
     test('test alpha cutoff expect disabled by default', async () => {
       await loadModel(HELMET_GLB_PATH);
-      // Disabled cutoff value hack see:
-      // https://github.com/google/model-viewer/blob/e3a000111980f5cf018c61dec8695463e0d843a0/packages/model-viewer/src/three-components/gltf-instance/ModelViewerGLTFInstance.ts#L210
       expect(element.model!.materials[0]![$correlatedObjects]
                  ?.values()
                  .next()
                  .value.alphaTest)
-          .to.be.equal(ALPHA_CUTOFF_OPAQUE);
+          .to.be.equal(0);
     });
 
     test('test alpha cutoff expect valid value as default', async () => {
@@ -234,5 +234,44 @@ suite('scene-graph/material', () => {
 
       expect(element.model!.materials[2].getAlphaMode()).to.be.equal('MASK');
     });
+  });
+  suite('Material lazy loading', () => {
+    let element: ModelViewerElement;
+    let model: Model;
+    setup(async () => {
+      element = new ModelViewerElement();
+      await loadModel(CUBES_GLTF_PATH);
+    });
+
+    teardown(() => {
+      document.body.removeChild(element);
+    });
+
+    const loadModel = async (path: string) => {
+      element.src = path;
+      document.body.insertBefore(element, document.body.firstChild);
+      await waitForEvent(element, 'load');
+      model = element.model as Model;
+    };
+
+    test('Accessing the name getter does not cause throw error.', async () => {
+      expect(model.materials[2].name).to.equal('red');
+      expect(model.materials[2][$lazyLoadGLTFInfo]).to.be.ok;
+    });
+
+    test(
+        'Accessing a getter of an unloaded material throws an error.',
+        async () => {
+          expect(() => {model.materials[2].pbrMetallicRoughness}).to.throw;
+          expect(model.materials[2].isLoaded).to.be.false;
+        });
+
+    test(
+        'Accessing a getter of a loaded material has valid data.', async () => {
+          await model.materials[2].ensureLoaded();
+          expect(model.materials[2].isLoaded).to.be.true;
+          const pbr = model.materials[2].pbrMetallicRoughness;
+          expect(pbr).to.be.ok;
+        });
   });
 });
