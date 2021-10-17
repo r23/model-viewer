@@ -12,11 +12,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {Material as ThreeMaterial, Mesh, SkinnedMesh} from 'three';
-import {GLTFReference} from 'three/examples/jsm/loaders/GLTFLoader';
+import {Material as ThreeMaterial, Mesh} from 'three';
 
 import {CorrelatedSceneGraph} from '../../../three-components/gltf-instance/correlated-scene-graph.js';
-import {KHRMaterialsVariants, Node as GLTFNode, Primitive} from '../../../three-components/gltf-instance/gltf-2.0.js';
+import {KHRMaterialsVariants, Primitive} from '../../../three-components/gltf-instance/gltf-2.0.js';
 import {$getLoadedMaterial, Material} from '../material.js';
 
 
@@ -30,6 +29,8 @@ export const $correlatedSceneGraph = Symbol('correlatedSceneGraph');
 export const $prepareVariantsForExport = Symbol('prepareVariantsForExport');
 export const $switchVariant = Symbol('switchVariant');
 export const $children = Symbol('children');
+export const $initialMaterialIdx = Symbol('initialMaterialIdx');
+export const $activeMaterialIdx = Symbol('activeMaterialIdx');
 
 // Defines the base level node methods and data.
 export class Node {
@@ -47,41 +48,31 @@ export class PrimitiveNode extends Node {
   private[$materials] = new Map<number, Material>();
   // Maps variant name to material index.
   private[$variantInfo]: Map<string, {material: Material, index: number}>;
-  // List of child nodes.
+  private[$initialMaterialIdx]: number;
+  private[$activeMaterialIdx]: number;
+
   constructor(
       mesh: Mesh, mvMaterials: Material[],
       correlatedSceneGraph: CorrelatedSceneGraph) {
     super(mesh.name);
     this[$mesh] = mesh;
-    const {gltf, threeGLTF} = correlatedSceneGraph;
+    const {gltf, threeGLTF, threeObjectMap} = correlatedSceneGraph;
 
-    // TODO: Remove the associationKey 'work arounds' after fixing Three.js
-    // associations. This is needed for now because Three.js does not create
-    // associations with SkinnedMeshes (glTF primitives of an animated object)
-    // and incorrect associations are formed when a mesh has multiple
-    // primitives.
-    let gltfMeshReference =
-        correlatedSceneGraph.threeObjectMap.get(mesh) as GLTFReference;
-    // Work around 1, skinned meshes (glTF primitives) have no association but
-    // the parent (mesh) does, which maps to a 'node'.
-    if (mesh instanceof SkinnedMesh && mesh.parent != null) {
-      gltfMeshReference =
-          correlatedSceneGraph.threeObjectMap.get(mesh.parent) as GLTFReference;
-    } else if (gltfMeshReference.type === 'materials' && mesh.parent != null) {
-      // Work around 2, when a static model has multiple primitives the
-      // association value is a material not a node.
-      gltfMeshReference =
-          correlatedSceneGraph.threeObjectMap.get(mesh.parent) as GLTFReference;
+    // Captures the primitive's initial material.
+    const materialMappings =
+        threeObjectMap.get(mesh.material as ThreeMaterial)!;
+    if (materialMappings.materials != null) {
+      this[$initialMaterialIdx] = this[$activeMaterialIdx] =
+          materialMappings.materials;
+    } else {
+      console.error(
+          `Primitive (${mesh.name}) missing initial material reference.`);
     }
 
-    const {type: nodes, index: nodeIndex} = gltfMeshReference;
-
-    // Should have the correct reference type now.
-    if (nodes !== 'nodes') {
-      console.error('Expected type \'nodes\' but got ' + nodes);
-    }
     // Gets the mesh index from the node.
-    const meshIndex = ((gltf[nodes] || []) as GLTFNode[])[nodeIndex].mesh!;
+    const meshMappings = threeObjectMap.get(mesh)!;
+    const meshIndex = meshMappings.meshes!;
+
     // The gltf mesh array to sample from.
     const meshElementArray = gltf['meshes'] || [];
     // List of primitives under the mesh.
@@ -139,17 +130,24 @@ export class PrimitiveNode extends Node {
     const mvMaterial = this[$materials].get(material);
     if (mvMaterial != null) {
       this.mesh.material = await mvMaterial[$getLoadedMaterial]();
+      this[$activeMaterialIdx] = material;
     }
     return this.mesh.material;
   }
 
-  async enableVariant(name: string):
-      Promise<ThreeMaterial|ThreeMaterial[]|null> {
+  getActiveMaterial(): Material {
+    return this[$materials].get(this[$activeMaterialIdx])!;
+  }
+
+  async enableVariant(name: string|
+                      null): Promise<ThreeMaterial|ThreeMaterial[]|null> {
+    if (name == null) {
+      return this.setActiveMaterial(this[$initialMaterialIdx]);
+    }
     if (this[$variantInfo] != null) {
       const material = this[$variantInfo].get(name);
       if (material != null) {
-        // tslint:disable-next-line:no-return-await needed by FireFox
-        return await this.setActiveMaterial(material.index);
+        return this.setActiveMaterial(material.index);
       }
     }
     return null;

@@ -14,7 +14,7 @@
  */
 
 import {property} from 'lit-element';
-import {Euler, RepeatWrapping, RGBFormat, sRGBEncoding, Texture, TextureLoader} from 'three';
+import {Euler, RepeatWrapping, RGBFormat, sRGBEncoding, Texture, TextureLoader, Vector2} from 'three';
 import {GLTFExporter, GLTFExporterOptions} from 'three/examples/jsm/exporters/GLTFExporter';
 
 import ModelViewerElementBase, {$needsRender, $onModelLoad, $renderer, $scene} from '../model-viewer-base.js';
@@ -23,21 +23,23 @@ import {NumberNode, parseExpressions} from '../styles/parsers.js';
 import {GLTF} from '../three-components/gltf-instance/gltf-defaulted.js';
 import {ModelViewerGLTFInstance} from '../three-components/gltf-instance/ModelViewerGLTFInstance.js';
 import GLTFExporterMaterialsVariantsExtension from '../three-components/gltf-instance/VariantMaterialExporterPlugin';
+import {NDCCoordsFromPixel_InPlace} from '../three-components/ModelUtils.js';
 import {Constructor} from '../utilities.js';
 
 import {Image, PBRMetallicRoughness, Sampler, TextureInfo} from './scene-graph/api.js';
 import {Material} from './scene-graph/material.js';
-import {$prepareVariantsForExport, $switchVariant, Model} from './scene-graph/model.js';
+import {$materialFromPoint, $prepareVariantsForExport, $switchVariant, Model} from './scene-graph/model.js';
 import {Texture as ModelViewerTexture} from './scene-graph/texture';
 
 
 
-const $currentGLTF = Symbol('currentGLTF');
+export const $currentGLTF = Symbol('currentGLTF');
 const $model = Symbol('model');
 const $variants = Symbol('variants');
 const $getOnUpdateMethod = Symbol('getOnUpdateMethod');
 const $textureLoader = Symbol('textureLoader');
 const $originalGltfJson = Symbol('originalGltfJson');
+const $ndcCoords = Symbol('ndcCoords');
 
 interface SceneExportOptions {
   binary?: boolean, trs?: boolean, onlyVisible?: boolean, embedImages?: boolean,
@@ -47,13 +49,21 @@ interface SceneExportOptions {
 
 export interface SceneGraphInterface {
   readonly model?: Model;
-  variantName: string|undefined;
+  variantName: string|null;
   readonly availableVariants: Array<string>;
   orientation: string;
   scale: string;
   readonly originalGltfJson: GLTF|null;
   exportScene(options?: SceneExportOptions): Promise<Blob>;
   createTexture(uri: string, type?: string): Promise<ModelViewerTexture|null>;
+  /**
+   * Intersects a ray with the scene and returns a list of materials who's
+   * objects were intersected.
+   * @param pixelX X coordinate of the mouse.
+   * @param pixelY Y coordinate of the mouse.
+   * @returns a material, if no intersection is made than null is returned.
+   */
+  materialFromPoint(pixelX: number, pixelY: number): Material|null;
 }
 
 /**
@@ -68,9 +78,10 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$variants]: Array<string> = [];
     private[$textureLoader] = new TextureLoader();
     private[$originalGltfJson]: GLTF|null = null;
+    private[$ndcCoords] = new Vector2();
 
     @property({type: String, attribute: 'variant-name'})
-    variantName: string|undefined = undefined;
+    variantName: string|null = null;
 
     @property({type: String, attribute: 'orientation'})
     orientation: string = '0 0 0';
@@ -148,9 +159,9 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
         if (threeGLTF == null) {
           return;
         }
-
         await this[$model]![$switchVariant](variantName!);
         this[$needsRender]();
+        this.dispatchEvent(new CustomEvent('variant-applied'));
       }
 
       if (changedProperties.has('orientation') ||
@@ -258,6 +269,16 @@ export const SceneGraphMixin = <T extends Constructor<ModelViewerElementBase>>(
           shadow.visible = visible;
         }
       });
+    }
+
+    materialFromPoint(pixelX: number, pixelY: number): Material|null {
+      const scene = this[$scene];
+      const {width, height} = scene;
+      this[$ndcCoords].set(pixelX, pixelY);
+      NDCCoordsFromPixel_InPlace(this[$ndcCoords], width, height);
+      scene.raycaster.setFromCamera(this[$ndcCoords], scene.getCamera());
+
+      return this[$model]![$materialFromPoint](scene.raycaster);
     }
   }
 

@@ -35,6 +35,16 @@
     ga('send', 'pageview');
   </script>
   <script async src='https://www.google-analytics.com/analytics.js'></script>
+  <style>
+    .demo model-viewer {
+      background-color: #fff;
+      --poster-color: #fff0;
+    }
+
+    model-viewer::part(default-progress-mask) {
+      display: none;
+    }
+  </style>
 </head>
 <body>
 
@@ -53,10 +63,10 @@
               <example-snippet inert-script stamp-to="demo-container" highlight-as="html">
                 <template>
 <!-- Import the component -->
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.js"></script>
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 
 <!-- Use it like any other HTML element -->
-<model-viewer src="shared-assets/models/Astronaut.glb" alt="A 3D model of an astronaut" ar ar-modes="webxr scene-viewer quick-look" environment-image="neutral" auto-rotate camera-controls></model-viewer>
+<model-viewer alt="Neil Armstrong's Spacesuit from the Smithsonian Digitization Programs Office and National Air and Space Museum" src="shared-assets/models/NeilArmstrong.glb" ar ar-modes="webxr scene-viewer quick-look" environment-image="shared-assets/environments/moon_1k.hdr" poster="assets/NeilArmstrong.webp" seamless-poster shadow-intensity="1" camera-controls></model-viewer>
                 </template>
               </example-snippet>
             </div>
@@ -76,28 +86,23 @@
             <img src="https://img.shields.io/github/stars/google/model-viewer.svg?style=social&label=Star&maxAge=2592000" alt="Github Discussions" />
           </a>
 
-        <div id="section-documentation">
-          <h3 class="grouping-title grouping-title-new border-bottom">Documentation</h3>
+        <div id="section-editor">
+          <h3 class="grouping-title grouping-title-new border-bottom">Editor</h3>
           <ol class="new-list-example">
             <li>
               <h4>
-                API <a href="docs/index.html">documentation</a> &amp; <a href="examples/loading/index.html">examples</a>
+                Try out your glTF & GLB models with our <a href="editor">Editor</a>, and download a whole customized starter website.
               </h4>
             </li>
           </ol>
         </div>
 
-        <div id="section-editor">
-          <h3 class="grouping-title grouping-title-new border-bottom">Model Editor</h3>
+        <div id="section-documentation">
+          <h3 class="grouping-title grouping-title-new border-bottom">Documentation</h3>
           <ol class="new-list-example">
             <li>
               <h4>
-                Use the <a href="editor">Model Editor</a> to prepare your GLB models for the web
-              </h4>
-            </li>
-            <li>
-              <h4>
-                <a href="examples/tester.html">Interactive Viewer</a> (Legacy)
+                API <a href="docs/index.html">Documentation</a> &amp; <a href="examples/loading/index.html">Examples</a>
               </h4>
             </li>
           </ol>
@@ -108,7 +113,7 @@
           <ol class="new-list-example">
             <li>
               <h4>
-                <a href="examples/lighthouse.html">Performance</a>
+                <a href="examples/lighthouse.html">Page Load Performance</a>
               </h4>
             </li>
             <li>
@@ -196,11 +201,11 @@
   <div class="footer">
     <ul>
       <li class="attribution">
-        <a href="https://poly.google.com/view/dLHpzNdygsg">Astronaut</a> by <a href="https://poly.google.com/user/4aEd8rQgKu2">Poly</a>,
-        licensed under <a href="https://creativecommons.org/licenses/by/2.0/">CC-BY</a>.
+        <a href="https://3d.si.edu/object/3d/neil-armstrong-spacesuit:d8c63ba6-4ebc-11ea-b77f-2e728ce88125">Neil Armstrong Space Suit</a> 
+        provided by the Smithsonian Digitization Programs Office and the National Air and Space Museum; Usage Conditions Apply.
       </li>
     </ul>
-    <div style="margin-top:24px;" class="copyright">©Copyright 2018-2020 Google Inc. Licensed under the Apache License 2.0.</div>
+    <div style="margin-top:24px;" class="copyright">©Copyright 2018-2021 Google Inc. Licensed under the Apache License 2.0.</div>
     <div id='footer-links'></div>
   </div>
 

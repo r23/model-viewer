@@ -19,20 +19,18 @@ import {customElement, html, internalProperty, query} from 'lit-element';
 
 import {reduxStore} from '../../space_opera_base.js';
 import {openMobileViewStyles} from '../../styles.css.js';
+import {timePasses} from '../../test/utils/test_utils.js';
 import {ArConfigState, ModelViewerSnippetState, State} from '../../types.js';
 import {getConfig} from '../config/reducer.js';
 import {ConnectedLitElement} from '../connected_lit_element/connected_lit_element.js';
-import {FileModalElement} from '../file_modal/file_modal.js';
 import {dispatchModelDirty, getGltfUrl, getModel, getModelViewer} from '../model_viewer_preview/reducer.js';
 import {getModelViewerSnippet} from '../model_viewer_snippet/reducer.js';
-import {dispatchSetIosName} from '../relative_file_paths/reducer.js';
-import {createSafeObjectUrlFromArrayBuffer} from '../utils/create_object_url.js';
 import {createPoster} from '../utils/render_model_viewer.js';
 
 import {MobileModal} from './components/mobile_modal.js';
-import {dispatchAr, dispatchArModes, dispatchIosSrc, dispatchSetForcePost, dispatchSetRefreshable, getArConfig, getForcePost, getRefreshable} from './reducer.js';
+import {dispatchAr, dispatchArModes, dispatchSetForcePost, dispatchSetRefreshable, getArConfig, getForcePost, getRefreshable} from './reducer.js';
 import {EditorUpdates, MobilePacket, MobileSession, URLs} from './types.js';
-import {envToSession, getPingUrl, getRandomInt, getSessionUrl, getWithTimeout, gltfToSession, post, posterToSession, prepareUSDZ, usdzToSession} from './utils.js';
+import {envToSession, getPingUrl, getRandomInt, getSessionUrl, getWithTimeout, gltfToSession, post, posterToSession} from './utils.js';
 
 const REFRESH_DELAY = 20000;  // 20s
 
@@ -51,13 +49,8 @@ export class OpenMobileView extends ConnectedLitElement {
   @internalProperty() isSendingData = false;
   @internalProperty() contentHasChanged = false;
 
-  @internalProperty() iosSrcIsReality: boolean = false;
-  @internalProperty() openedIOS: boolean = false;
-  @internalProperty() iosAndNoUsdz = false;
-  @query('me-file-modal') fileModal!: FileModalElement;
-
-  @internalProperty() urls: URLs = {gltf: '', env: '', usdz: ''};
-  @internalProperty() lastUrlsSent: URLs = {gltf: '', env: '', usdz: ''};
+  @internalProperty() urls: URLs = {gltf: '', env: ''};
+  @internalProperty() lastUrlsSent: URLs = {gltf: '', env: ''};
   @internalProperty() snippet!: ModelViewerSnippetState;
   @internalProperty() lastSnippetSent!: ModelViewerSnippetState;
   @internalProperty() modelIsDirty = false;
@@ -84,11 +77,7 @@ export class OpenMobileView extends ConnectedLitElement {
     // Update urls with most recent from redux state.
     // If the values are different from this.lastUrlsSent, values are sent when
     // the refresh button is pressed.
-    this.urls = {
-      gltf: gltfURL,
-      env: getConfig(state).environmentImage,
-      usdz: this.arConfig.iosSrc
-    };
+    this.urls = {gltf: gltfURL, env: getConfig(state).environmentImage};
 
     this.snippet = getModelViewerSnippet(state);
     this.modelIsDirty = !!getModel(state)?.isDirty;
@@ -101,7 +90,6 @@ export class OpenMobileView extends ConnectedLitElement {
     }
     this.defaultToSceneViewer =
         this.arConfig.arModes === 'scene-viewer webxr quick-look';
-    this.iosAndNoUsdz = this.openedIOS && this.arConfig.iosSrc === undefined;
 
     if (getForcePost(state) === true) {
       this.postInfo();
@@ -112,7 +100,6 @@ export class OpenMobileView extends ConnectedLitElement {
   // True if any content we'd send to the mobile view has changed.
   getContentHasChanged(): boolean {
     return this.stateHasChanged() || this.isNewModel() ||
-        this.isNewSource(this.urls.usdz, this.lastUrlsSent.usdz) ||
         this.isNewSource(this.urls.env, this.lastUrlsSent.env);
   }
 
@@ -142,9 +129,6 @@ export class OpenMobileView extends ConnectedLitElement {
           posterId: getRandomInt(1e+20),
           envChanged: this.isNewSource(this.urls.env, this.lastUrlsSent.env),
           envIsHdr: this.envIsHdr(), gltfId: getRandomInt(1e+20),
-          usdzId: getRandomInt(1e+20),
-          iosChanged: this.isNewSource(this.urls.usdz, this.lastUrlsSent.usdz),
-          iosSrcIsReality: this.iosSrcIsReality,
     }
   }
 
@@ -153,10 +137,8 @@ export class OpenMobileView extends ConnectedLitElement {
   getStaleContent(): EditorUpdates {
     return {
       gltfChanged: true, stateChanged: true, posterId: getRandomInt(1e+20),
-          envChanged: this.urls.env !== undefined, envIsHdr: this.envIsHdr(),
-          gltfId: getRandomInt(1e+20), usdzId: getRandomInt(1e+20),
-          iosChanged: this.urls.usdz !== undefined,
-          iosSrcIsReality: this.iosSrcIsReality,
+          envChanged: this.urls.env != undefined && this.urls.env !== 'neutral',
+          envIsHdr: this.envIsHdr(), gltfId: getRandomInt(1e+20),
     }
   }
 
@@ -167,8 +149,7 @@ export class OpenMobileView extends ConnectedLitElement {
   // clicked.
   async sendSessionContent(
       session: MobileSession, updatedContent: EditorUpdates, posterBlob: Blob,
-      usdzBlob: Blob|undefined, gltfBlob: Blob|undefined,
-      envBlob: Blob|undefined) {
+      gltfBlob: Blob|undefined, envBlob: Blob|undefined) {
     if (session.isStale) {
       updatedContent = this.getStaleContent();
     }
@@ -185,16 +166,6 @@ export class OpenMobileView extends ConnectedLitElement {
     await post(
         posterBlob,
         posterToSession(this.pipeId, session.id, updatedContent.posterId));
-
-    if (updatedContent.iosChanged && usdzBlob) {
-      await post(
-          usdzBlob,
-          usdzToSession(
-              this.pipeId,
-              session.id,
-              updatedContent.usdzId,
-              this.iosSrcIsReality));
-    }
 
     if (updatedContent.gltfChanged && gltfBlob) {
       await post(
@@ -214,16 +185,10 @@ export class OpenMobileView extends ConnectedLitElement {
 
   async sendSessionContentHolder(
       session: MobileSession, updatedContent: EditorUpdates, posterBlob: Blob,
-      usdzBlob: Blob|undefined, gltfBlob: Blob|undefined,
-      envBlob: Blob|undefined) {
+      gltfBlob: Blob|undefined, envBlob: Blob|undefined) {
     try {
       await this.sendSessionContent(
-          session,
-          {...updatedContent},
-          posterBlob,
-          usdzBlob,
-          gltfBlob,
-          envBlob);
+          session, updatedContent, posterBlob, gltfBlob, envBlob);
     } catch (e) {
       console.log('error posting...');
     }
@@ -253,24 +218,18 @@ export class OpenMobileView extends ConnectedLitElement {
       haveStale = haveStale || session.isStale;
     }
 
-    // Blobs will be defined if their content has changed since the last
-    // refresh, or if any session is stale -- a stale session requires us to
-    // send all content to that session.
-    const usdzBlob =
-        (updatedContent.iosChanged || (haveStale && staleContent.iosChanged)) ?
-        await prepareUSDZ(this.urls.usdz!) :
-        undefined;
-
     const gltfBlob = (updatedContent.gltfChanged ||
                       (haveStale && staleContent.gltfChanged)) ?
         await getModelViewer()!.exportScene() :
         undefined;
 
-    let envBlob;
-    if (updatedContent.envChanged || (haveStale && staleContent.envChanged)) {
-      const response = await fetch(this.urls.env!);
+    let envBlob: Blob|undefined;
+    const {env, gltf} = this.urls;
+    if (env != null && env !== 'neutral' &&
+        (updatedContent.envChanged || (haveStale && staleContent.envChanged))) {
+      const response = await fetch(env);
       if (!response.ok) {
-        throw new Error(`Failed to fetch url: ${this.urls.env!}`);
+        throw new Error(`Failed to fetch url: ${env}`);
       }
       envBlob = await response.blob();
     }
@@ -281,18 +240,12 @@ export class OpenMobileView extends ConnectedLitElement {
     // post their information asynchronously.
     for (let session of sessionList) {
       this.sendSessionContentHolder(
-          session,
-          {...updatedContent},
-          posterBlob,
-          usdzBlob,
-          gltfBlob,
-          envBlob);
+          session, updatedContent, posterBlob, gltfBlob, envBlob);
     }
 
     this.lastSnippetSent = {...this.snippet};
-    this.lastUrlsSent['env'] = this.urls['env'];
-    this.lastUrlsSent['usdz'] = this.urls['usdz'];
-    this.lastUrlsSent['gltf'] = this.urls['gltf'];
+    this.lastUrlsSent.env = env;
+    this.lastUrlsSent.gltf = gltf;
 
     reduxStore.dispatch(dispatchModelDirty(false));
     this.contentHasChanged = this.getContentHasChanged();
@@ -305,9 +258,6 @@ export class OpenMobileView extends ConnectedLitElement {
     if (response.ok) {
       const json: MobileSession = await response.json();
       this.sessionList.push(json);
-      if (json.os === 'iOS') {
-        this.openedIOS = true;
-      }
       // Only update if not currently updating...
       if (!this.isSendingData) {
         this.postInfo();
@@ -322,9 +272,12 @@ export class OpenMobileView extends ConnectedLitElement {
   // refreshed.
   async pingLoop() {
     try {
-      await this.waitForPing();
+      if (!await this.waitForPing()) {
+        await timePasses(1000);
+      }
     } catch (error) {
       console.log('error...', error);
+      await timePasses(1000);
     }
     this.pingLoop();
   }
@@ -333,29 +286,14 @@ export class OpenMobileView extends ConnectedLitElement {
     this.mobileModal.open();
   }
 
-  // The editor is waiting for at least one mobile session to ping back.
-  async onDeploy() {
-    let wasPinged = false;
-    try {
-      wasPinged = await this.waitForPing();
-    } catch (error) {
-      console.log('error...', error);
-    }
-    if (wasPinged) {
-      this.pingLoop();
-    } else {
-      this.onDeploy();
-    }
-  }
-
   // Initialize AR values and start deploy loop
-  async onInitialDeploy() {
+  onInitialDeploy() {
     this.openModal();
     this.isDeployed = true;
     if (this.arConfig?.arModes === undefined) {
       reduxStore.dispatch(dispatchArModes('webxr scene-viewer quick-look'));
     }
-    await this.onDeploy();
+    this.pingLoop();
   }
 
   onEnableARChange(isEnabled: boolean) {
@@ -369,22 +307,6 @@ export class OpenMobileView extends ConnectedLitElement {
     } else {
       reduxStore.dispatch(dispatchArModes('webxr scene-viewer quick-look'));
     }
-  }
-
-  async onUploadUSDZ() {
-    const files: any = await this.fileModal.open();
-    if (!files) {
-      /// The user canceled the previous upload
-      return;
-    }
-    const fileName = files[0].name;
-    const arrayBuffer = await files[0].arrayBuffer();
-    reduxStore.dispatch(dispatchSetIosName(fileName));
-    const url = createSafeObjectUrlFromArrayBuffer(arrayBuffer).unsafeUrl;
-    reduxStore.dispatch(dispatchIosSrc(url));
-
-    const fileType = fileName.split('.')[fileName.split('.').length - 1];
-    this.iosSrcIsReality = fileType === 'reality';
   }
 
   render() {
@@ -402,11 +324,8 @@ export class OpenMobileView extends ConnectedLitElement {
       .onSelectArMode=${this.onSelectArMode.bind(this)}
       .arConfig=${this.arConfig}
       .onEnableARChange=${this.onEnableARChange.bind(this)}
-      .iosAndNoUsdz=${this.iosAndNoUsdz}
-      .onUploadUSDZ=${this.onUploadUSDZ.bind(this)}
     >
     </mobile-expandable-section>
-    <me-file-modal accept=".usdz,.reality"></me-file-modal>
     <mobile-modal .pipeId=${this.pipeId}></mobile-modal>
   `;
   }

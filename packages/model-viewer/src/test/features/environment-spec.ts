@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+import {Texture} from 'three';
+
 import {BASE_OPACITY, EnvironmentInterface, EnvironmentMixin} from '../../features/environment.js';
 import ModelViewerElementBase, {$scene} from '../../model-viewer-base.js';
 import {ModelScene} from '../../three-components/ModelScene.js';
@@ -25,16 +27,6 @@ const expect = chai.expect;
 const ALT_BG_IMAGE_URL = assetPath('environments/white_furnace.hdr');
 const HDR_BG_IMAGE_URL = assetPath('environments/spruit_sunrise_1k_HDR.hdr');
 const MODEL_URL = assetPath('models/reflective-sphere.gltf');
-
-const backgroundHasMap =
-    (scene: ModelScene, url: string|null) => {
-      return (scene.background as any).userData.url === url;
-    }
-
-const modelUsingEnvMap =
-    (scene: ModelScene, url: string|null) => {
-      return (scene.environment as any).userData.url === url;
-    }
 
 /**
  * Returns a promise that resolves when a given element is loaded
@@ -83,10 +75,10 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
     element.src = MODEL_URL;
     document.body.insertBefore(element, document.body.firstChild);
     await rafPasses();
-    expect(environmentChangeCount).to.be.equal(0);
+    expect(environmentChangeCount).to.be.eq(0);
     element.style.display = 'block';
     await waitForEvent(element, 'environment-change');
-    expect(environmentChangeCount).to.be.equal(1);
+    expect(environmentChangeCount).to.be.eq(1);
     element.removeEventListener('environment-change', environmentChangeHandler);
   });
 
@@ -94,7 +86,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
     let environmentChanges = 0;
     suite('and a src property', () => {
       setup(async () => {
-        let onLoad = waitForLoadAndEnvMap(element);
+        const onLoad = waitForLoadAndEnvMap(element);
         element.src = MODEL_URL;
         document.body.insertBefore(element, document.body.firstChild);
 
@@ -110,7 +102,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
       });
 
       test('applies a generated environment map on model', async function() {
-        expect(modelUsingEnvMap(scene, null)).to.be.ok;
+        expect(scene.environment!.name).to.be.eq('default');
       });
 
       test('changes the environment exactly once', async function() {
@@ -167,7 +159,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
 
   suite('environment-image', () => {
     setup(async () => {
-      let onLoad = waitForLoadAndEnvMap(element);
+      const onLoad = waitForLoadAndEnvMap(element);
       element.setAttribute('src', MODEL_URL);
       element.setAttribute('environment-image', HDR_BG_IMAGE_URL);
       document.body.insertBefore(element, document.body.firstChild);
@@ -179,25 +171,25 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
     });
 
     test('applies environment-image environment map on model', () => {
-      expect(modelUsingEnvMap(scene, element.environmentImage)).to.be.ok;
+      expect(scene.environment!.name).to.be.eq(element.environmentImage);
     });
 
     suite('and environment-image subsequently removed', () => {
       setup(async () => {
-        let envMapChanged = waitForEvent(scene, 'envmap-update');
+        const envMapChanged = waitForEvent(scene, 'envmap-update');
         element.removeAttribute('environment-image');
         await envMapChanged;
       });
 
       test('reapplies generated environment map on model', () => {
-        expect(modelUsingEnvMap(scene, null)).to.be.ok;
+        expect(scene.environment!.name).to.be.eq('default');
       });
     });
   });
 
   suite('with skybox-image property', () => {
     setup(async () => {
-      let onLoad = waitForLoadAndEnvMap(element);
+      const onLoad = waitForLoadAndEnvMap(element);
       element.setAttribute('src', MODEL_URL);
       element.setAttribute('skybox-image', HDR_BG_IMAGE_URL);
       document.body.insertBefore(element, document.body.firstChild);
@@ -209,11 +201,11 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
     });
 
     test('displays background with skybox-image', async function() {
-      expect(backgroundHasMap(scene, element.skyboxImage!)).to.be.ok;
+      expect((scene.background as Texture).name).to.be.eq(element.skyboxImage);
     });
 
     test('applies skybox-image environment map on model', async function() {
-      expect(modelUsingEnvMap(scene, element.skyboxImage)).to.be.ok;
+      expect(scene.environment!.name).to.be.eq(element.skyboxImage);
     });
 
     suite('with an environment-image', () => {
@@ -224,7 +216,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
       });
 
       test('prefers environment-image as environment map', () => {
-        expect(modelUsingEnvMap(scene, ALT_BG_IMAGE_URL)).to.be.ok;
+        expect(scene.environment!.name).to.be.eq(ALT_BG_IMAGE_URL);
       });
 
       suite('and environment-image subsequently removed', () => {
@@ -236,20 +228,19 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
         });
 
         test('uses skybox-image as environment map', () => {
-          expect(modelUsingEnvMap(scene, HDR_BG_IMAGE_URL)).to.be.ok;
+          expect(scene.environment!.name).to.be.eq(HDR_BG_IMAGE_URL);
         });
       });
 
       suite('and skybox-image subsequently removed', () => {
         setup(async () => {
-          const environmentChanged =
-              waitForEvent(element, 'environment-change');
+          const envMapChanged = waitForEvent(scene, 'envmap-update');
           element.removeAttribute('skybox-image');
-          await environmentChanged;
+          await envMapChanged;
         });
 
         test('continues using environment-image as environment map', () => {
-          expect(modelUsingEnvMap(scene, ALT_BG_IMAGE_URL)).to.be.ok;
+          expect(scene.environment!.name).to.be.eq(ALT_BG_IMAGE_URL);
         });
 
         test('removes the background', async function() {
@@ -260,7 +251,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
 
     suite('and skybox-image subsequently removed', () => {
       setup(async () => {
-        let envMapChanged = waitForEvent(scene, 'envmap-update');
+        const envMapChanged = waitForEvent(scene, 'envmap-update');
         element.removeAttribute('skybox-image');
         await envMapChanged;
       });
@@ -270,7 +261,7 @@ suite('ModelViewerElementBase with EnvironmentMixin', () => {
       });
 
       test('reapplies generated environment map on model', async function() {
-        expect(modelUsingEnvMap(scene, null)).to.be.ok;
+        expect(scene.environment!.name).to.be.eq('default');
       });
     });
   });
