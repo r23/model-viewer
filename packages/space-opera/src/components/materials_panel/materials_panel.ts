@@ -15,6 +15,9 @@
  *
  */
 
+import '@material/mwc-icon-button';
+import '@polymer/paper-item';
+import '@polymer/paper-slider';
 import '../shared/checkbox/checkbox.js';
 import '../shared/color_picker/color_picker.js';
 import '../shared/dropdown/dropdown.js';
@@ -23,11 +26,10 @@ import '../shared/expandable_content/expandable_tab.js';
 import '../shared/section_row/section_row.js';
 import '../shared/slider_with_input/slider_with_input.js';
 import '../shared/texture_picker/texture_picker.js';
-import '@polymer/paper-item';
-import '@polymer/paper-slider';
-import '@material/mwc-icon-button';
 
+import {Material} from '@google/model-viewer/lib/features/scene-graph/material';
 import {RGB, RGBA} from '@google/model-viewer/lib/model-viewer';
+import {PaperListboxElement} from '@polymer/paper-listbox';
 import {customElement, html, internalProperty, query} from 'lit-element';
 import * as color from 'ts-closure-library/lib/color/color';  // from //third_party/javascript/closure/color
 
@@ -43,11 +45,13 @@ import {CheckboxElement} from '../shared/checkbox/checkbox.js';
 import {ColorPicker} from '../shared/color_picker/color_picker.js';
 import {Dropdown} from '../shared/dropdown/dropdown.js';
 import {SliderWithInputElement} from '../shared/slider_with_input/slider_with_input.js';
+import {TabbedPanel} from '../shared/tabs/tabs.js';
 import {FileDetails, TexturePicker} from '../shared/texture_picker/texture_picker.js';
 import {ALPHA_BLEND_MODES} from '../utils/gltf_constants.js';
 import {checkFinite} from '../utils/reducer_utils.js';
 
 import {styles} from './materials_panel.css.js';
+
 
 
 /** Material panel. */
@@ -71,6 +75,8 @@ export class MaterialPanel extends ConnectedLitElement {
   @query('me-slider-with-input#metallic-factor')
   metallicFactorSlider!: SliderWithInputElement;
   @query('me-dropdown#material-selector') materialSelector!: Dropdown;
+  @query('me-dropdown#variant-selector') variantSelector!: Dropdown;
+  createVariantSelector!: Dropdown;
   @query('me-texture-picker#base-color-texture-picker')
   baseColorTexturePicker!: TexturePicker;
   @query('me-texture-picker#metallic-roughness-texture-picker')
@@ -89,6 +95,7 @@ export class MaterialPanel extends ConnectedLitElement {
   @query('#alpha-cutoff-container') alphaCutoffContainer!: HTMLDivElement;
   @query('me-checkbox#doubleSidedCheckbox')
   doubleSidedCheckbox!: CheckboxElement;
+  selectableMaterials = new Array<Material>();
 
   stateChanged(state: State) {
     const {originalGltf, thumbnailsById} = getModel(state);
@@ -102,6 +109,9 @@ export class MaterialPanel extends ConnectedLitElement {
           this.thumbnailIds.push(id);
           this.thumbnailUrls.push(thumbnail.objectUrl);
         }
+
+        this.updateSelectableMaterials();
+
         // If a new model is loaded, don't interpolate material
         this.isNewModel = true;
         this.selectedMaterialIndex = 0;
@@ -170,7 +180,9 @@ export class MaterialPanel extends ConnectedLitElement {
     const originalEmissiveFactor = this.selectedEmissiveFactor;
 
     let start = -1;
-    const DURATION = 1600;  // in milliseconds
+    const DURATION = 500;  // in milliseconds
+
+    const material = this.getMaterial();
 
     const interpolateStep = (timestamp: number) => {
       // New model is loaded mid interpolation
@@ -180,11 +192,10 @@ export class MaterialPanel extends ConnectedLitElement {
 
       const baseColorFactor = this.getInterpolatedColor(
           originalBaseColor, timestamp - start, DURATION);
-      this.getMaterial().pbrMetallicRoughness.setBaseColorFactor(
-          baseColorFactor);
+      material.pbrMetallicRoughness.setBaseColorFactor(baseColorFactor);
       const emissiveFactor = this.getInterpolatedEmissive(
           originalEmissiveFactor, timestamp - start, DURATION);
-      this.getMaterial().setEmissiveFactor(emissiveFactor);
+      material.setEmissiveFactor(emissiveFactor);
 
       if (timestamp - start <= DURATION) {
         requestAnimationFrame(interpolateStep);
@@ -245,32 +256,89 @@ export class MaterialPanel extends ConnectedLitElement {
     }
   }
 
+  renderVariantsTab() {
+    const hasVariants = getModelViewer().availableVariants.length > 0;
+    return html`
+    <me-expandable-tab tabName="Variants" .open=${hasVariants}>
+      <me-dropdown
+        style='display: ${hasVariants ? '' : 'none'}'
+        slot="content"
+        id="variant-selector"
+        @select=${this.onSelectVariant}
+        >${
+        getModelViewer().availableVariants.map(
+            (name, id) =>
+                html`<paper-item value="${name}">(${id}) ${name}</paper-item>`)}
+      </me-dropdown>
+    </me-expandable-tab>
+    `;
+  }
+
   renderSelectMaterialTab() {
     return html`
-    <me-expandable-tab tabName="Selected Material" .open=${true} .sticky=${
-        true}>
+    <me-expandable-tab tabName="Selected Material" .open=${true}>
       <me-dropdown
         slot="content"
         id="material-selector"
         @select=${this.onSelectMaterial}
         >${
-        getModelViewer()?.model?.materials.map(
-            (material, id) => html`<paper-item value="${id}">(${id}) ${
-                material.name ? material.name :
-                                'Unnamed Material'}</paper-item>`)}
+        this.selectableMaterials.map(
+            (material, i) =>
+                html`<paper-item value="${i}">(${material.index}) ${
+                    material.name ? material.name :
+                                    'Unnamed Material'}</paper-item>`)}
       </me-dropdown>
     </me-expandable-tab>
     `;
   }
 
   get selectedMaterialIndex(): number {
-    return this.materialSelector.selectedIndex;
+    return this.selectableMaterials[this.materialSelector.selectedIndex].index;
   }
 
   set selectedMaterialIndex(index: number) {
     this.materialSelector.selectedIndex = index;
     this.onSelectMaterial();
   }
+
+  get selectedVariant(): string|null {
+    return getModelViewer().variantName;
+  }
+
+  set selectedVariant(name: string|null) {
+    getModelViewer().variantName = name;
+  }
+
+  firstUpdated() {
+    // Enables material picking but prevents selection while dragging a model.
+    let drag = false;
+    getModelViewer().addEventListener('pointerdown', () => drag = false);
+    getModelViewer().addEventListener('pointermove', () => drag = true);
+    getModelViewer().addEventListener('pointerup', (event) => {
+      if (!drag) {
+        this.onClick(event);
+      }
+    });
+  }
+
+  onClick = (event) => {
+    if (!(this.parentElement as TabbedPanel).selected) {
+      return;
+    }
+    const modelviewer = getModelViewer();
+    const pickedMaterial =
+        modelviewer.materialFromPoint(event.clientX, event.clientY);
+    if (pickedMaterial == null) {
+      return;
+    }
+
+    for (const [index, material] of this.selectableMaterials.entries()) {
+      if (material === pickedMaterial) {
+        this.selectedMaterialIndex = index;
+        return;
+      }
+    }
+  };
 
   get selectedBaseColor(): RGBA {
     const alphaFactor =
@@ -490,7 +558,7 @@ export class MaterialPanel extends ConnectedLitElement {
         ALPHA_BLEND_MODES[this.alphaModePicker.selectedIndex] as AlphaMode;
     this.alphaCutoffContainer.style.display =
         selectedMode === 'MASK' ? '' : 'none';
-    const material = this.getMaterial()
+    const material = this.getMaterial();
     material.setAlphaMode(selectedMode);
     this.alphaCutoffSlider.value = material.getAlphaCutoff();
     reduxStore.dispatch(dispatchModelDirty());
@@ -766,9 +834,34 @@ export class MaterialPanel extends ConnectedLitElement {
     `;
   }
 
+  updateSelectableMaterials() {
+    this.selectableMaterials = [];
+    for (const material of getModelViewer()!.model!.materials) {
+      if (material.isActive) {
+        this.selectableMaterials.push(material);
+      }
+    }
+  }
+
+  async onSelectVariant() {
+    const paperItem = this.variantSelector.selectedItem as PaperListboxElement;
+    if (paperItem != null && paperItem.hasAttribute('value')) {
+      this.selectedVariant = paperItem.getAttribute('value');
+
+      const onVariantApplied = () => {
+        this.updateSelectableMaterials();
+        this.selectedMaterialIndex = 0;
+      };
+
+      getModelViewer().addEventListener(
+          'variant-applied', onVariantApplied, {once: true});
+    }
+  }
+
   render() {
     return html`
     <div id="material-container" style="display: none">
+    ${this.renderVariantsTab()}
     ${this.renderSelectMaterialTab()}
     ${this.renderBaseColorTab()}
     ${this.renderMetallicRoughnessTab()}
