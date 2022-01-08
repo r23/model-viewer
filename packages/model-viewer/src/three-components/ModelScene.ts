@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import {AnimationAction, AnimationClip, AnimationMixer, Box3, Camera, Event as ThreeEvent, Matrix3, Object3D, PerspectiveCamera, Raycaster, Scene, Vector2, Vector3} from 'three';
+import {AnimationAction, AnimationClip, AnimationMixer, Box3, Camera, Event as ThreeEvent, Matrix3, Object3D, PerspectiveCamera, Raycaster, Scene, Vector2, Vector3, LoopRepeat, LoopPingPong} from 'three';
 import {CSS2DRenderer} from 'three/examples/jsm/renderers/CSS2DRenderer';
 
 import ModelViewerElementBase, {$renderer, RendererInterface} from '../model-viewer-base.js';
@@ -449,11 +449,11 @@ export class ModelScene extends Scene {
     const goal = this.goalTarget;
     const target = this.target.position;
     if (!goal.equals(target)) {
-      const radius = this.idealCameraDistance;
+      const normalization = this.idealCameraDistance / 10;
       let {x, y, z} = target;
-      x = this.targetDamperX.update(x, goal.x, delta, radius);
-      y = this.targetDamperY.update(y, goal.y, delta, radius);
-      z = this.targetDamperZ.update(z, goal.z, delta, radius);
+      x = this.targetDamperX.update(x, goal.x, delta, normalization);
+      y = this.targetDamperY.update(y, goal.y, delta, normalization);
+      z = this.targetDamperZ.update(z, goal.z, delta, normalization);
       this.target.position.set(x, y, z);
       this.target.updateMatrixWorld();
       this.setShadowRotation(this.yaw);
@@ -490,7 +490,12 @@ export class ModelScene extends Scene {
 
   get animationTime(): number {
     if (this.currentAnimationAction != null) {
-      return this.currentAnimationAction.time;
+      const loopCount = Math.max((this.currentAnimationAction as any)._loopCount, 0);
+      if (this.currentAnimationAction.loop === LoopPingPong && (loopCount & 1) === 1) {
+        return this.duration - this.currentAnimationAction.time
+      } else {
+        return this.currentAnimationAction.time;
+      }
     }
 
     return 0;
@@ -515,7 +520,7 @@ export class ModelScene extends Scene {
    * provided, or if no animation is found by the given name, always falls back
    * to playing the first animation.
    */
-  playAnimation(name: string|null = null, crossfadeTime: number = 0) {
+  playAnimation(name: string|null = null, crossfadeTime: number = 0, loopMode: number = LoopRepeat, repetitionCount: number = Infinity) {
     if (this._currentGLTF == null) {
       return;
     }
@@ -549,7 +554,10 @@ export class ModelScene extends Scene {
         action.crossFadeFrom(lastAnimationAction, crossfadeTime, false);
       }
 
+      action.setLoop(loopMode, repetitionCount);
+
       action.enabled = true;
+
       action.play();
     } catch (error) {
       console.error(error);
@@ -563,6 +571,10 @@ export class ModelScene extends Scene {
 
   updateAnimation(step: number) {
     this.mixer.update(step);
+  }
+
+  subscribeMixerEvent(event: string, callback: (...args: any[]) => void) {
+    this.mixer.addEventListener(event, callback);
   }
 
   /**
@@ -655,12 +667,13 @@ export class ModelScene extends Scene {
   }
 
   /**
-   * This method returns the world position and model-space normal of the point
-   * on the mesh corresponding to the input pixel coordinates given relative to
-   * the model-viewer element. If the mesh is not hit, the result is null.
+   * This method returns the world position, model-space normal and texture
+   * coordinate of the point on the mesh corresponding to the input pixel
+   * coordinates given relative to the model-viewer element. If the mesh
+   * is not hit, the result is null.
    */
   positionAndNormalFromPoint(ndcPosition: Vector2, object: Object3D = this):
-      {position: Vector3, normal: Vector3}|null {
+      {position: Vector3, normal: Vector3, uv: Vector2|null}|null {
     this.raycaster.setFromCamera(ndcPosition, this.getCamera());
     const hits = this.raycaster.intersectObject(object, true);
 
@@ -673,10 +686,14 @@ export class ModelScene extends Scene {
       return null;
     }
 
+    if (hit.uv == null) {
+      return {position: hit.point, normal: hit.face.normal, uv: null};
+    }
+
     hit.face.normal.applyNormalMatrix(
         new Matrix3().getNormalMatrix(hit.object.matrixWorld));
 
-    return {position: hit.point, normal: hit.face.normal};
+    return {position: hit.point, normal: hit.face.normal, uv: hit.uv};
   }
 
   /**

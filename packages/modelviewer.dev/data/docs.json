@@ -663,6 +663,11 @@
         "name": "getMaximumFieldOfView()",
         "htmlName": "getMaximumFieldOfView",
         "description": "Returns the maximum camera vertical field of view in degrees."
+      },
+      {
+        "name": "zoom(keyPresses)",
+        "htmlName": "zoom",
+        "description": "Applies the default zoom behavior (a combination of radius and field of view change), mimicking keyboard or mouse wheel inputs. If keyPresses = 1.0, it will zoom in as much as a single keystroke; negative values zoom out."
       }
     ],
     "Events": [
@@ -714,7 +719,7 @@
       {
         "name": "positionAndNormalFromPoint(clientX, clientY)",
         "htmlName": "positionAndNormalFromPoint",
-        "description": "Returns the world position and normal of the point on the mesh corresponding to the input pixel coordinates given relative to the screen. The position and normal are returned as Vector3D, which has a method toString() that outputs a format suitable for putting in a hotspot's <span class='attribute'>data-position</span> and <span class='attribute'>data-normal</span> attributes. The function returns null if no object is hit.",
+        "description": "Returns the world position, normal and texture coordinate of the point on the mesh corresponding to the input pixel coordinates given relative to the screen. The position and normal are returned as Vector3D, which has a method toString() that outputs a format suitable for putting in a hotspot's <span class='attribute'>data-position</span> and <span class='attribute'>data-normal</span> attributes. The texture coordinate is returned as Vector2D, which has also a own toString() method. The function returns null if no object is hit.",
         "links": [
           "<a href=\"../examples/stagingandcameras/#panning\"><span class='attribute'>positionAndNormalFromPoint</span> example</a>"
         ]
@@ -859,9 +864,9 @@
     ],
     "Methods": [
       {
-        "name": "play()",
+        "name": "play(options: {repetitions, pingpong})",
         "htmlName": "play",
-        "description": "Causes animations to be played. Use the autoplay attribute if you want animations to be played automatically. If there are no animations, nothing will happen, so make sure that the model is loaded before invoking this method."
+        "description": "Causes animations to be played. You can specify the number of repetitions of the animation by setting the number of <i>repetitions</i> to any value greater than 0 (defaults to Infinity). Also if you set <i>pingpong</i> to true, alternately playing forward and backward (defaults to false). Use the autoplay attribute if you want animations to be played automatically. If there are no animations, nothing will happen, so make sure that the model is loaded before invoking this method."
       },
       {
         "name": "pause()",
@@ -879,6 +884,16 @@
         "name": "pause",
         "htmlName": "pause",
         "description": "Dispatched when animations are paused. A model always begins in the paused state, so it is worth mentioning that this event will not be dispatched until the the <span class='attribute'>.pause()</span> method is invoked after animations have begun playing."
+      },
+      {
+        "name": "loop",
+        "htmlName": "loop",
+        "description": "Dispatched when the current animation has looped. You can get the loop count with <span class='attribute'>e.detail.count</span>."
+      },
+      {
+        "name": "finished",
+        "htmlName": "finished",
+        "description": "Dispatched when the current animation has finished playing."
       }
     ]
   },

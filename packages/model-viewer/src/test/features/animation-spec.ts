@@ -73,7 +73,7 @@ suite('ModelViewerElementBase with AnimationMixin', () => {
       expect(element.paused).to.be.true;
     });
 
-    suite('when play is invoked', () => {
+    suite('when play is invoked with no options', () => {
       setup(async () => {
         const animationsPlay = waitForEvent(element, 'play');
         element.play();
@@ -103,6 +103,50 @@ suite('ModelViewerElementBase with AnimationMixin', () => {
           element.currentTime = 5;
           expect(element[$scene].shouldRender()).to.be.true;
         });
+
+        suite('when play is invoked again', () => {
+          setup(async () => {
+            const animationsPlay = waitForEvent(element, 'play');
+            element.play();
+            await animationsPlay;
+          });
+
+          test('animations play', () => {
+            expect(animationIsPlaying(element)).to.be.true;
+          });
+
+          test('has a duration greater than 0', () => {
+            expect(element.duration).to.be.greaterThan(0);
+          });
+        })
+      });
+    });
+
+    suite('when play is invoked with options', () => {
+      setup(async () => {
+        element.animationName = 'Punch';
+        await element.updateComplete;
+        const animationsPlay = waitForEvent(element, 'play');
+        element.play({repetitions: 2, pingpong: true});
+        await animationsPlay;
+      });
+
+      test('plays forward, backward, and stops', async () => {
+        await timePasses(element.duration * 0.8 * 1000);
+        expect(animationIsPlaying(element), 'failed to start playing!')
+            .to.be.true;
+        const t = element.currentTime;
+
+        await timePasses(element.duration * 1.0 * 1000);
+        expect(animationIsPlaying(element), 'not playing after 1.8 * duration!')
+            .to.be.true;
+        expect(element.currentTime, 'not playing backwards!').to.be.lessThan(t);
+
+        await timePasses(element.duration * 0.4 * 1000);
+        expect(animationIsPlaying(element), 'failed to stop playing!')
+            .to.be.false;
+        expect(element.currentTime, 'did not return to beginning of animation!')
+            .to.be.equal(0);
       });
     });
 

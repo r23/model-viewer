@@ -13,8 +13,7 @@
  * limitations under the License.
  */
 
-import {ACESFilmicToneMapping, Event, EventDispatcher, GammaEncoding, PCFSoftShadowMap, WebGLRenderer} from 'three';
-import {RoughnessMipmapper} from 'three/examples/jsm/utils/RoughnessMipmapper';
+import {ACESFilmicToneMapping, Event, EventDispatcher, PCFSoftShadowMap, sRGBEncoding, WebGLRenderer} from 'three';
 
 import {$updateEnvironment} from '../features/environment.js';
 import {ModelViewerGlobalConfig} from '../features/loading.js';
@@ -95,7 +94,6 @@ export class Renderer extends EventDispatcher {
   public canvas3D: HTMLCanvasElement;
   public textureUtils: TextureUtils|null;
   public arRenderer: ARRenderer;
-  public roughnessMipmapper: RoughnessMipmapper;
   public loader = new CachingGLTFLoader(ModelViewerGLTFInstance);
   public width = 0;
   public height = 0;
@@ -146,7 +144,7 @@ export class Renderer extends EventDispatcher {
         preserveDrawingBuffer: true
       });
       this.threeRenderer.autoClear = true;
-      this.threeRenderer.outputEncoding = GammaEncoding;
+      this.threeRenderer.outputEncoding = sRGBEncoding;
       this.threeRenderer.physicallyCorrectLights = true;
       this.threeRenderer.setPixelRatio(1);  // handle pixel ratio externally
       this.threeRenderer.shadowMap.enabled = true;
@@ -166,7 +164,6 @@ export class Renderer extends EventDispatcher {
     this.arRenderer = new ARRenderer(this);
     this.textureUtils =
         this.canRender ? new TextureUtils(this.threeRenderer) : null;
-    this.roughnessMipmapper = new RoughnessMipmapper(this.threeRenderer);
     CachingGLTFLoader.initializeKTX2Loader(this.threeRenderer);
 
     this.canvas3D.addEventListener('webglcontextlost', this.onWebGLContextLost);
@@ -494,10 +491,6 @@ export class Renderer extends EventDispatcher {
       this.textureUtils.dispose();
     }
 
-    if (this.roughnessMipmapper != null) {
-      this.roughnessMipmapper.dispose();
-    }
-
     if (this.threeRenderer != null) {
       this.threeRenderer.dispose();
     }
@@ -526,7 +519,6 @@ export class Renderer extends EventDispatcher {
   onWebGLContextRestored = () => {
     this.textureUtils?.dispose();
     this.textureUtils = new TextureUtils(this.threeRenderer);
-    this.roughnessMipmapper = new RoughnessMipmapper(this.threeRenderer);
     for (const scene of this.scenes) {
       (scene.element as any)[$updateEnvironment]();
     }
