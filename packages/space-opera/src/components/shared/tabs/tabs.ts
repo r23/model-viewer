@@ -15,12 +15,13 @@
  *
  */
 
-import '@material/mwc-tab';
 import '@material/mwc-tab-bar';
 
-import {customElement, html, LitElement, property} from 'lit-element';
+import {html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
 
 import {styles} from './styles.css.js';
+import './tab';
 
 /**
  * A tabbed panel.
@@ -39,10 +40,10 @@ export class Tabs extends LitElement {
   renderPanelIcon(panel: Element) {
     if (panel instanceof TabbedPanel) {
       return html`
-      <mwc-tab
+      <me-tab
         icon='${panel.icon}'
         label='${panel.label}'
-      ></mwc-tab>`;
+      ></me-tab>`;
     }
     return html``;
   }
