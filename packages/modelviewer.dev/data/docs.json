@@ -59,14 +59,13 @@
       {
         "name": "reveal",
         "htmlName": "reveal",
-        "description": "This attribute controls when the model should be revealed. It currently supports three values: \"auto\", \"interaction\", and \"manual\". If <span class='attribute'>reveal</span> is set to \"interaction\", <span class='attribute'>&lt;model-viewer&gt;</span> will wait until the user interacts with the poster before loading and revealing the model. If <span class='attribute'>reveal</span> is set to \"auto\", the model will be revealed as soon as it is done loading and rendering. If <span class='attribute'>reveal</span> is set to \"manual\", the model will remain hidden until <span class='attribute'>dismissPoster()</span> is called.",
+        "description": "This attribute controls when the model should be revealed. If <span class='attribute'>reveal</span> is set to \"auto\", the model will be revealed as soon as it is done loading and rendering. If <span class='attribute'>reveal</span> is set to \"manual\", the model will remain hidden until <span class='attribute'>dismissPoster()</span> is called.",
         "links": [
-          "<a href=\"../examples/loading\">Related examples</a>",
-          "<a href=\"../examples/loading/#preload\"><span class='attribute'>reveal=\"interaction\"</span> example</a>"
+          "<a href=\"../examples/loading\">Related examples</a>"
         ],
         "default": {
           "default": "auto",
-          "options": "auto, interaction, manual"
+          "options": "auto, manual"
         }
       },
       {
@@ -521,33 +520,15 @@
         }
       },
       {
-        "name": "interaction-policy",
-        "htmlName": "interactionPolicy",
-        "description": "Allows you to change whether the viewer requires focus before interacting with it. If set to \"allow-when-focused\", the user must focus on the viewer (click / tap) before being able to control it. If set to \"always-allow\", the user can control it even if the viewer is not the focused element on the page. Defaults to \"always-allow\".",
-        "default": {
-          "default": "always-allow",
-          "options": "allow-when-focused, always-allow"
-        }
-      },
-      {
         "name": "interaction-prompt",
         "htmlName": "interactionPrompt",
-        "description": "Allows you to change the conditions under which the visual and audible interaction prompt will display. If set to \"auto\", the interaction prompt will be displayed as soon as the <span class='attribute'>interaction-prompt-threshold</span> (see below) time has elapsed (after the model is revealed). If set to \"when-focused\", the interaction prompt will only be activated if the element has first received focus. The interaction prompt will only display if <span class='attribute'>camera-controls</span> are enabled.",
+        "description": "Allows you to disable the visual and audible interaction prompt. If set to \"auto\", the interaction prompt will be displayed as soon as the <span class='attribute'>interaction-prompt-threshold</span> (see below) time has elapsed (after the model is revealed). The interaction prompt will only display if <span class='attribute'>camera-controls</span> are enabled.",
         "links": [
           "<a href=\"../examples/scenegraph/#changeColor\"><span class='attribute'>interaction-prompt=\"none\"</span> example</a>"
         ],
         "default": {
           "default": "auto",
-          "options": "auto, when-focused, none"
-        }
-      },
-      {
-        "name": "interaction-prompt-style",
-        "htmlName": "interactionPromptStyle",
-        "description": "Configures the presentation style of the <span class='attribute'>interaction-prompt</span> when it is raised. When set to \"wiggle\", the prompt will animate horizontally and the model will rotate as though the prompt is interacting with it. When set to \"basic\", the prompt is not animated, and instead simply appears until it is dismissed by user interaction.",
-        "default": {
-          "default": "wiggle",
-          "options": "wiggle, basic"
+          "options": "auto, none"
         }
       },
       {
@@ -627,18 +608,6 @@
           "default": "25deg",
           "options": "angle between 0 and 180 degrees"
         }
-      },
-      {
-        "name": "bounds",
-        "htmlName": "bounds",
-        "description": "Sets the method of calculating the model's bounding box, which affects its shadow's position and default camera framing. Legacy mode is conservative and occasionally results in a bounding box that is too large, especially when used with the orientation attribute. Tight will give precise results and will also account for a custom camera-target, keeping the model always in frame by default. Tight will become the default value in a future release, so check if your seamless poster images need updating.",
-        "default": {
-          "default": "legacy",
-          "options": "tight, legacy"
-        },
-        "links": [
-          "<a href=\"../examples/scenegraph/#transforms\">Related example</a>"
-        ]
       },
       {
         "name": "interpolation-decay",
@@ -826,13 +795,13 @@
       {
         "name": "environment-image",
         "htmlName": "environmentImage",
-        "description": "Controls the environmental reflection of the model. Normally if <span class='attribute'>skybox-image</span> is set, that image will also be used for the <span class='attribute'>environment-image</span>. Use <span class='attribute'>environment-image</span> to only set the reflection without affecting the background. If neither is specified, default lighting will be applied. If 'neutral' is specified without a skybox, then a more evenly-lit environment is applied instead.",
+        "description": "Controls the environmental reflection of the model. Normally if <span class='attribute'>skybox-image</span> is set, that image will also be used for the <span class='attribute'>environment-image</span>. Use <span class='attribute'>environment-image</span> to only set the reflection without affecting the background. If neither is specified, default neutral lighting will be applied. If 'legacy' is specified without a skybox, then our old default environment is applied instead.",
         "links": [
           "<a href=\"../examples/lightingandenv/#environmentLighting\">Related examples</a>"
         ],
         "default": {
           "default": "empty string",
-          "options": "'neutral' or a URL to a .hdr or .jpg file"
+          "options": "'neutral', 'legacy', or a URL to a .hdr or .jpg file"
         }
       },
       {

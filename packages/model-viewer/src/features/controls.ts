@@ -58,15 +58,13 @@ const fade = timeline({
 });
 
 export const DEFAULT_FOV_DEG = 30;
-export const OLD_DEFAULT_FOV_DEG = 45;
-const DEFAULT_MIN_FOV_DEG = 12;
-const OLD_DEFAULT_MIN_FOV_DEG = 25;
+export const DEFAULT_MIN_FOV_DEG = 12;
 
 export const DEFAULT_CAMERA_ORBIT = '0deg 75deg 105%';
 const DEFAULT_CAMERA_TARGET = 'auto auto auto';
 const DEFAULT_FIELD_OF_VIEW = 'auto';
 
-const MINIMUM_RADIUS_RATIO = 1.1;
+const MINIMUM_RADIUS_RATIO = 2.2;
 
 const AZIMUTHAL_QUADRANT_LABELS = ['front', 'right', 'back', 'left'];
 const POLAR_TRIENT_LABELS = ['upper-', '', 'lower-'];
@@ -90,29 +88,14 @@ export interface Finger {
   y: Path;
 }
 
-export type InteractionPromptStrategy = 'auto'|'when-focused'|'none';
-export type InteractionPromptStyle = 'basic'|'wiggle';
-export type InteractionPolicy = 'always-allow'|'allow-when-focused';
+export type InteractionPromptStrategy = 'auto'|'none';
 export type TouchAction = 'pan-y'|'pan-x'|'none';
-export type Bounds = 'tight'|'legacy';
 
 export const InteractionPromptStrategy:
     {[index: string]: InteractionPromptStrategy} = {
       AUTO: 'auto',
-      WHEN_FOCUSED: 'when-focused',
       NONE: 'none'
     };
-
-export const InteractionPromptStyle:
-    {[index: string]: InteractionPromptStyle} = {
-      BASIC: 'basic',
-      WIGGLE: 'wiggle'
-    };
-
-export const InteractionPolicy: {[index: string]: InteractionPolicy} = {
-  ALWAYS_ALLOW: 'always-allow',
-  WHEN_FOCUSED: 'allow-when-focused'
-};
 
 export const TouchAction: {[index: string]: TouchAction} = {
   PAN_Y: 'pan-y',
@@ -120,22 +103,20 @@ export const TouchAction: {[index: string]: TouchAction} = {
   NONE: 'none'
 };
 
-export const fieldOfViewIntrinsics =
-    (element: ModelViewerElementBase&ControlsInterface) => {
-      const fov = element.enablePan ? DEFAULT_FOV_DEG : OLD_DEFAULT_FOV_DEG;
-
-      return {
-        basis: [degreesToRadians(numberNode(fov, 'deg')) as NumberNode<'rad'>],
-        keywords: {auto: [null]}
-      };
-    };
-
-const minFieldOfViewIntrinsics = (element: ModelViewerElementBase&
-                                  ControlsInterface) => {
-  const fov = element.enablePan ? DEFAULT_MIN_FOV_DEG : OLD_DEFAULT_MIN_FOV_DEG;
-
+export const fieldOfViewIntrinsics = () => {
   return {
-    basis: [degreesToRadians(numberNode(fov, 'deg')) as NumberNode<'rad'>],
+    basis:
+        [degreesToRadians(numberNode(DEFAULT_FOV_DEG, 'deg')) as
+         NumberNode<'rad'>],
+    keywords: {auto: [null]}
+  };
+};
+
+const minFieldOfViewIntrinsics = () => {
+  return {
+    basis:
+        [degreesToRadians(numberNode(DEFAULT_MIN_FOV_DEG, 'deg')) as
+         NumberNode<'rad'>],
     keywords: {auto: [null]}
   };
 };
@@ -158,20 +139,19 @@ export const cameraOrbitIntrinsics = (() => {
   };
 })();
 
-const minCameraOrbitIntrinsics =
-    (element: ModelViewerElementBase&ControlsInterface) => {
-      const radius = MINIMUM_RADIUS_RATIO *
-          element[$scene].boundingSphere.radius * (element.enablePan ? 2 : 1);
+const minCameraOrbitIntrinsics = (element: ModelViewerElementBase&
+                                  ControlsInterface) => {
+  const radius = MINIMUM_RADIUS_RATIO * element[$scene].boundingSphere.radius;
 
-      return {
-        basis: [
-          numberNode(-Infinity, 'rad'),
-          numberNode(Math.PI / 8, 'rad'),
-          numberNode(radius, 'm')
-        ],
-        keywords: {auto: [null, null, null]}
-      };
-    };
+  return {
+    basis: [
+      numberNode(-Infinity, 'rad'),
+      numberNode(Math.PI / 8, 'rad'),
+      numberNode(radius, 'm')
+    ],
+    keywords: {auto: [null, null, null]}
+  };
+};
 
 const maxCameraOrbitIntrinsics = (element: ModelViewerElementBase) => {
   const orbitIntrinsics = cameraOrbitIntrinsics(element);
@@ -216,8 +196,6 @@ const $deferInteractionPrompt = Symbol('deferInteractionPrompt');
 const $updateAria = Symbol('updateAria');
 const $updateCameraForRadius = Symbol('updateCameraForRadius');
 
-const $onBlur = Symbol('onBlur');
-const $onFocus = Symbol('onFocus');
 const $onChange = Symbol('onChange');
 const $onPointerChange = Symbol('onPointerChange');
 
@@ -225,7 +203,6 @@ const $waitingToPromptUser = Symbol('waitingToPromptUser');
 const $userHasInteracted = Symbol('userHasInteracted');
 const $promptElementVisibleTime = Symbol('promptElementVisibleTime');
 const $lastPromptOffset = Symbol('lastPromptOffset');
-const $focusedTime = Symbol('focusedTime');
 
 const $lastSpherical = Symbol('lastSpherical');
 const $jumpCamera = Symbol('jumpCamera');
@@ -251,12 +228,9 @@ export declare interface ControlsInterface {
   minFieldOfView: string;
   maxFieldOfView: string;
   interactionPrompt: InteractionPromptStrategy;
-  interactionPromptStyle: InteractionPromptStyle;
-  interactionPolicy: InteractionPolicy;
   interactionPromptThreshold: number;
   orbitSensitivity: number;
   touchAction: TouchAction;
-  bounds: Bounds;
   interpolationDecay: number;
   disableZoom: boolean;
   enablePan: boolean;
@@ -338,16 +312,9 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     @property({type: Number, attribute: 'interaction-prompt-threshold'})
     interactionPromptThreshold: number = DEFAULT_INTERACTION_PROMPT_THRESHOLD;
 
-    @property({type: String, attribute: 'interaction-prompt-style'})
-    interactionPromptStyle: InteractionPromptStyle =
-        InteractionPromptStyle.WIGGLE;
-
     @property({type: String, attribute: 'interaction-prompt'})
     interactionPrompt: InteractionPromptStrategy =
         InteractionPromptStrategy.AUTO;
-
-    @property({type: String, attribute: 'interaction-policy'})
-    interactionPolicy: InteractionPolicy = InteractionPolicy.ALWAYS_ALLOW;
 
     @property({type: Number, attribute: 'orbit-sensitivity'})
     orbitSensitivity: number = 1;
@@ -364,8 +331,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     @property({type: Number, attribute: 'interpolation-decay'})
     interpolationDecay: number = DECAY_MILLISECONDS;
 
-    @property({type: String, attribute: 'bounds'}) bounds: Bounds = 'legacy';
-
     protected[$promptElement] =
         this.shadowRoot!.querySelector('.interaction-prompt') as HTMLElement;
     protected[$promptAnimatedContainer] =
@@ -377,7 +342,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$panElement] =
         this.shadowRoot!.querySelector('.pan-target') as HTMLElement;
 
-    protected[$focusedTime] = Infinity;
     protected[$lastPromptOffset] = 0;
     protected[$promptElementVisibleTime] = Infinity;
     protected[$userHasInteracted] = false;
@@ -477,7 +441,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       const controls = this[$controls];
       const scene = this[$scene];
-      const input = this[$userInputElement];
 
       if (changedProperties.has('cameraControls')) {
         if (this.cameraControls) {
@@ -485,13 +448,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
           if (this.interactionPrompt === InteractionPromptStrategy.AUTO) {
             this[$waitingToPromptUser] = true;
           }
-
-          input.addEventListener('focus', this[$onFocus]);
-          input.addEventListener('blur', this[$onBlur]);
         } else {
-          input.removeEventListener('focus', this[$onFocus]);
-          input.removeEventListener('blur', this[$onBlur]);
-
           controls.disableInteraction();
           this[$deferInteractionPrompt]();
         }
@@ -506,10 +463,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         controls.enablePan = this.enablePan;
       }
 
-      if (changedProperties.has('bounds')) {
-        scene.tightBounds = this.bounds === 'tight';
-      }
-
       if (changedProperties.has('interactionPrompt') ||
           changedProperties.has('cameraControls') ||
           changedProperties.has('src')) {
@@ -519,11 +472,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         } else {
           this[$deferInteractionPrompt]();
         }
-      }
-
-      if (changedProperties.has('interactionPolicy')) {
-        const interactionPolicy = this.interactionPolicy;
-        controls.applyOptions({interactionPolicy});
       }
 
       if (changedProperties.has('touchAction')) {
@@ -726,13 +674,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       const now = performance.now();
       if (this[$waitingToPromptUser]) {
-        const thresholdTime =
-            this.interactionPrompt === InteractionPromptStrategy.AUTO ?
-            this[$loadedTime] :
-            this[$focusedTime];
-
         if (this.loaded &&
-            now > thresholdTime + this.interactionPromptThreshold) {
+            now > this[$loadedTime] + this.interactionPromptThreshold) {
           this[$waitingToPromptUser] = false;
           this[$promptElementVisibleTime] = now;
 
@@ -740,8 +683,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         }
       }
 
-      if (isFinite(this[$promptElementVisibleTime]) &&
-          this.interactionPromptStyle === InteractionPromptStyle.WIGGLE) {
+      if (isFinite(this[$promptElementVisibleTime])) {
         const animationTime =
             ((now - this[$promptElementVisibleTime]) / PROMPT_ANIMATION_TIME) %
             1;
@@ -852,33 +794,6 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       this.requestUpdate('cameraTarget', this.cameraTarget);
       this.jumpCameraToGoal();
     }
-
-    [$onFocus] = () => {
-      if (!isFinite(this[$focusedTime])) {
-        this[$focusedTime] = performance.now();
-      }
-
-      // NOTE(cdata): On every re-focus, if the user has
-      // already interacted, they no longer need to hear the prompt.
-      // Otherwise, they will hear it again after the idle prompt threshold
-      // has been crossed.
-      if (this.interactionPrompt === InteractionPromptStrategy.WHEN_FOCUSED &&
-          !this[$userHasInteracted]) {
-        this[$waitingToPromptUser] = true;
-      }
-    };
-
-    [$onBlur] = () => {
-      if (this.interactionPrompt !== InteractionPromptStrategy.WHEN_FOCUSED) {
-        return;
-      }
-
-      this[$waitingToPromptUser] = false;
-      this[$promptElement].classList.remove('visible');
-
-      this[$promptElementVisibleTime] = Infinity;
-      this[$focusedTime] = Infinity;
-    };
 
     [$onChange] = ({source}: ChangeEvent) => {
       this[$updateAria]();
