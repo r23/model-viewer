@@ -68,10 +68,6 @@
       max-height: 600px;
     }
 
-    model-viewer::part(default-progress-mask) {
-      display: none;
-    }
-
     /* This keeps child nodes hidden while the element loads, except the poster */
     :not(:defined) > :not(.poster) {
       display: none;
@@ -253,7 +249,6 @@
         id="first"
         src="../assets/ShopifyModels/Chair.glb"
         poster="../assets/ShopifyModels/ChairPoster.webp"
-        seamless-poster
         camera-orbit="1.2195rad 1.362rad 100%"
         interaction-prompt-threshold="0"
         shadow-intensity="1"
@@ -316,7 +311,6 @@
       id="second"
       src="../assets/ShopifyModels/Mixer.glb"
       poster="../assets/ShopifyModels/MixerPoster.webp"
-      seamless-poster
       camera-orbit="0.9677rad 1.2427rad 100%"
       interaction-prompt-threshold="0"
       shadow-intensity="1"

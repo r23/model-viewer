@@ -17,7 +17,7 @@ import {property} from 'lit/decorators.js';
 import {Event, PerspectiveCamera, Spherical, Vector3} from 'three';
 
 import {style} from '../decorators.js';
-import ModelViewerElementBase, {$ariaLabel, $container, $hasTransitioned, $loadedTime, $needsRender, $onModelLoad, $onResize, $renderer, $scene, $tick, $updateStatus, $userInputElement, toVector3D, Vector3D} from '../model-viewer-base.js';
+import ModelViewerElementBase, {$ariaLabel, $container, $getModelIsVisible, $loadedTime, $needsRender, $onModelLoad, $onResize, $renderer, $scene, $tick, $updateStatus, $userInputElement, toVector3D, Vector3D} from '../model-viewer-base.js';
 import {degreesToRadians, normalizeUnit} from '../styles/conversions.js';
 import {EvaluatedStyle, Intrinsics, SphericalIntrinsics, StyleEvaluator, Vector3Intrinsics} from '../styles/evaluators.js';
 import {IdentNode, NumberNode, numberNode, parseExpressions} from '../styles/parsers.js';
@@ -25,6 +25,7 @@ import {DECAY_MILLISECONDS} from '../three-components/Damper.js';
 import {ChangeEvent, ChangeSource, PointerChangeEvent, SmoothControls} from '../three-components/SmoothControls.js';
 import {Constructor} from '../utilities.js';
 import {Path, timeline, TimingFunction} from '../utilities/animation.js';
+
 
 
 // NOTE(cdata): The following "animation" timing functions are deliberately
@@ -233,7 +234,8 @@ export declare interface ControlsInterface {
   touchAction: TouchAction;
   interpolationDecay: number;
   disableZoom: boolean;
-  enablePan: boolean;
+  disablePan: boolean;
+  disableTap: boolean;
   getCameraOrbit(): SphericalPosition;
   getCameraTarget(): Vector3D;
   getFieldOfView(): number;
@@ -245,6 +247,7 @@ export declare interface ControlsInterface {
   resetInteractionPrompt(): void;
   zoom(keyPresses: number): void;
   interact(duration: number, finger0: Finger, finger1?: Finger): void;
+  inputSensitivity: number;
 }
 
 export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
@@ -320,13 +323,16 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     orbitSensitivity: number = 1;
 
     @property({type: String, attribute: 'touch-action'})
-    touchAction: TouchAction = TouchAction.PAN_Y;
+    touchAction: TouchAction = TouchAction.NONE;
 
     @property({type: Boolean, attribute: 'disable-zoom'})
     disableZoom: boolean = false;
 
-    @property({type: Boolean, attribute: 'enable-pan'})
-    enablePan: boolean = false;
+    @property({type: Boolean, attribute: 'disable-pan'})
+    disablePan: boolean = false;
+
+    @property({type: Boolean, attribute: 'disable-tap'})
+    disableTap: boolean = false;
 
     @property({type: Number, attribute: 'interpolation-decay'})
     interpolationDecay: number = DECAY_MILLISECONDS;
@@ -355,6 +361,14 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     protected[$jumpCamera] = false;
     protected[$initialized] = false;
     protected[$maintainThetaPhi] = false;
+
+    get inputSensitivity(): number {
+      return this[$controls].inputSensitivity;
+    }
+
+    set inputSensitivity(value: number) {
+      this[$controls].inputSensitivity = value;
+    }
 
     getCameraOrbit(): SphericalPosition {
       const {theta, phi, radius} = this[$lastSpherical];
@@ -459,8 +473,12 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         controls.disableZoom = this.disableZoom;
       }
 
-      if (changedProperties.has('enablePan')) {
-        controls.enablePan = this.enablePan;
+      if (changedProperties.has('disablePan')) {
+        controls.enablePan = !this.disablePan;
+      }
+
+      if (changedProperties.has('disableTap')) {
+        controls.enableTap = !this.disableTap;
       }
 
       if (changedProperties.has('interactionPrompt') ||
@@ -481,7 +499,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       }
 
       if (changedProperties.has('orbitSensitivity')) {
-        controls.sensitivity = this.orbitSensitivity;
+        controls.orbitSensitivity = this.orbitSensitivity;
       }
 
       if (changedProperties.has('interpolationDecay')) {
@@ -564,12 +582,15 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       };
 
       const moveTouches = () => {
-        // cancel interaction if user interacts
-        if (this[$controls].isUserChange) {
+        // cancel interaction if something else moves the camera
+        const {changeSource} = this[$controls];
+        if (changeSource !== ChangeSource.AUTOMATIC) {
           for (const fingerElement of this[$fingerAnimatedContainers]) {
             fingerElement.style.opacity = '0';
           }
           dispatchTouches('pointercancel');
+          this.dispatchEvent(new CustomEvent<CameraChangeDetails>(
+              'interact-stopped', {detail: {source: changeSource}}));
           return;
         }
 
@@ -584,6 +605,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
           requestAnimationFrame(moveTouches);
         } else {
           dispatchTouches('pointerup');
+          this.dispatchEvent(new CustomEvent<CameraChangeDetails>(
+              'interact-stopped', {detail: {source: changeSource}}));
           document.removeEventListener('visibilitychange', onVisibilityChange);
         }
       };
@@ -618,7 +641,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
         style[1] = phi;
         this[$maintainThetaPhi] = false;
       }
-      controls.isUserChange = false;
+      controls.changeSource = ChangeSource.NONE;
       controls.setOrbit(style[0], style[1], style[2]);
     }
 
@@ -658,14 +681,14 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
       if (!this[$renderer].arRenderer.isPresenting) {
         this[$scene].setTarget(x, y, z);
       }
-      this[$controls].isUserChange = false;
+      this[$controls].changeSource = ChangeSource.NONE;
       this[$renderer].arRenderer.updateTarget();
     }
 
     [$tick](time: number, delta: number) {
       super[$tick](time, delta);
 
-      if (this[$renderer].isPresenting || !this[$hasTransitioned]()) {
+      if (this[$renderer].isPresenting || !this[$getModelIsVisible]()) {
         return;
       }
 
@@ -699,7 +722,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
           this[$promptAnimatedContainer].style.transform =
               `translateX(${xOffset}px)`;
 
-          controls.isUserChange = false;
+          controls.changeSource = ChangeSource.AUTOMATIC;
           controls.adjustOrbit(deltaTheta, 0, 0);
 
           this[$lastPromptOffset] = offset;
@@ -708,9 +731,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       controls.update(time, delta);
       if (scene.updateTarget(delta)) {
-        const source = controls.isUserChange ? ChangeSource.USER_INTERACTION :
-                                               ChangeSource.NONE;
-        this[$onChange]({type: 'change', source});
+        this[$onChange]({type: 'change', source: controls.changeSource});
       }
     }
 
