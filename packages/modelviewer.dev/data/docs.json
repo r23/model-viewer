@@ -513,6 +513,15 @@
         }
       },
       {
+        "name": "interaction-prompt-style",
+        "htmlName": "interactionPromptStyle",
+        "description": "Configures the presentation style of the <span class='attribute'>interaction-prompt</span> when it is raised. When set to \"wiggle\", the prompt will animate horizontally and the model will rotate as though the prompt is interacting with it. When set to \"basic\", the prompt is not animated, and instead simply appears until it is dismissed by user interaction.",
+        "default": {
+          "default": "wiggle",
+          "options": "wiggle, basic"
+        }
+      },
+      {
         "name": "interaction-prompt-threshold",
         "htmlName": "interactionPromptThreshold",
         "description": "When <span class='attribute'>camera-controls</span> are enabled, <span class='attribute'>&lt;model-viewer&gt;</span> will prompt the user visually (and audibly, for screen readers) to interact if they focus it but don't interact with it for some time. This attribute allows you to set how long <span class='attribute'>&lt;model-viewer&gt;</span> should wait (in milliseconds) before prompting to interact. Defaults to 3000.",
@@ -757,9 +766,9 @@
       {
         "name": "queryHotspot(name)",
         "htmlName": "queryHotspot",
-        "description": "Returns information about the current state of the hotspot corresponding to the hotspot name given as a read-only snapshot: The position, normal, screen (canvas) position and current visibility. The screen position is represented as a Vector3 with z as the OpenGL depth information. The function returns null if no hotspot is found.",
+        "description": "Returns information about the current state of the hotspot corresponding to the hotspot name as a snapshot: the position, normal, canvasPosition, and facingCamera. The canvas position is represented as a Vector3D with z as the OpenGL depth information. The function returns null if no hotspot is found.",
         "links": [
-          "<a href=\"../examples/annotations/#overlays\"><span class='attribute'>custom overlays</span> example</a>"
+          "<a href=\"../examples/annotations/#dimensions\"><span class='attribute'>dimension lines</span> example</a>"
         ]
       },
       {
