@@ -34,9 +34,7 @@
   <link type="text/css" href="styles/examples.css" rel="stylesheet" />
   <link rel="shortcut icon" type="image/png" href="assets/favicon.png"/>
 
-  <!-- 💁 OPTIONAL: The :focus-visible polyfill removes the focus ring for some input types -->
-  <script src="node_modules/focus-visible/dist/focus-visible.js" defer></script>
-
+  <script defer src="https://web3dsurvey.com/collector.js"></script>
   <script>
     window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
     ga('create', 'UA-169901325-1', { 'storage': 'none' });
@@ -68,7 +66,7 @@
               <example-snippet inert-script stamp-to="demo-container" highlight-as="html">
                 <template>
 <!-- Import the component -->
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
 
 <!-- Use it like any other HTML element -->
 <model-viewer alt="Neil Armstrong's Spacesuit from the Smithsonian Digitization Programs Office and National Air and Space Museum" src="shared-assets/models/NeilArmstrong.glb" ar environment-image="shared-assets/environments/moon_1k.hdr" poster="shared-assets/models/NeilArmstrong.webp" shadow-intensity="1" camera-controls touch-action="pan-y"></model-viewer>
@@ -118,6 +116,31 @@
             <li>
               <h4>
                 <a href="docs/index.html">API Reference</a>
+              </h4>
+            </li>
+          </ol>
+        </div>
+
+        <div id="section-addons">
+          <h3 class="grouping-title grouping-title-new border-bottom">Addons</h3>
+          <ol class="new-list-example">
+            <h4 class="group-title-new border-bottom">
+              <p class="attribute">&lt;model-viewer-effects&gt;</p>
+              <a href="https://bundlephobia.com/result?p=@google/model-viewer-effects">
+                <img src="https://badgen.net/bundlephobia/minzip/@google/model-viewer-effects" alt="Min Zip" />
+              </a>
+              <a href="https://www.npmjs.com/package/@google/model-viewer-effects">
+                <img src="https://img.shields.io/npm/v/@google/model-viewer-effects" alt="Latest Release" />
+              </a>
+            </h4>
+            <li>
+              <h4>
+                <a href="examples/postprocessing/index.html">Examples</a>
+              </h4>
+            </li>
+            <li>
+              <h4>
+                <a href="docs/mve.html">API Reference</a>
               </h4>
             </li>
           </ol>
@@ -179,18 +202,6 @@
           </div>
 
           <div style="clear:both"></div>
-
-          <p class="browser-support-desc"><code>:focus-visible</code> is an as-yet unimplemented web platform feature that enables
-          content authors to style a component on the condition that it received focus in
-          such a way that suggests the focus state should be visibly evident.</p>
-
-          <p class="browser-support-desc">The <code>:focus-visible</code> capability has not been implemented in any stable browsers
-          yet. If <a href="https://github.com/WICG/focus-visible">the polyfill</a> is available on the page, 
-          <code>&lt;model-viewer&gt;</code> will use it and only display focus rings when <code>:focus-visible</code> should apply.</p>
-
-          <p class="browser-support-desc">Check out <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-visible">this related MDN</a> 
-          article for more details on <code>:focus-visible</code>.</p>
-
         </div>
 
       </div>

@@ -15,7 +15,7 @@
 
 import {ReactiveElement} from 'lit';
 import {property} from 'lit/decorators.js';
-import {Event as ThreeEvent, Vector2, Vector3} from 'three';
+import {Camera as ThreeCamera, Event as ThreeEvent, Vector2, Vector3, WebGLRenderer} from 'three';
 
 import {HAS_INTERSECTION_OBSERVER, HAS_RESIZE_OBSERVER} from './constants.js';
 import {$updateEnvironment} from './features/environment.js';
@@ -24,7 +24,6 @@ import {$evictionPolicy, CachingGLTFLoader} from './three-components/CachingGLTF
 import {ModelScene} from './three-components/ModelScene.js';
 import {ContextLostEvent, Renderer} from './three-components/Renderer.js';
 import {clamp, debounce} from './utilities.js';
-import {dataUrlToBlob} from './utilities/data-conversion.js';
 import {ProgressTracker} from './utilities/progress-tracker.js';
 
 const CLEAR_MODEL_TIMEOUT_MS = 10;
@@ -117,6 +116,15 @@ export interface FramingInfo {
 export interface Camera {
   viewMatrix: Array<number>;
   projectionMatrix: Array<number>;
+}
+
+export interface EffectComposerInterface {
+  setRenderer(renderer: WebGLRenderer): void;
+  setMainScene(scene: ModelScene): void;
+  setMainCamera(camera: ThreeCamera): void;
+  setSize(width: number, height: number): void;
+  beforeRender(time: DOMHighResTimeStamp, delta: DOMHighResTimeStamp): void;
+  render(deltaTime?: DOMHighResTimeStamp): void;
 }
 
 export interface RendererInterface {
@@ -397,7 +405,8 @@ export default class ModelViewerElementBase extends ReactiveElement {
     }
 
     if (changedProperties.has('withCredentials')) {
-      CachingGLTFLoader.withCredentials = this.withCredentials
+      CachingGLTFLoader.withCredentials = this.withCredentials;
+      this[$renderer].textureUtils!.withCredentials = this.withCredentials;
     }
 
     if (changedProperties.has('generateSchema')) {
@@ -453,19 +462,6 @@ export default class ModelViewerElementBase extends ReactiveElement {
             0,
             outputWidth,
             outputHeight);
-        if ((blobCanvas as any).msToBlob) {
-          // NOTE: msToBlob only returns image/png
-          // so ensure mimeType is not specified (defaults to image/png)
-          // or is image/png, otherwise fallback to using toDataURL on IE.
-          if (!mimeType || mimeType === 'image/png') {
-            return resolve((blobCanvas as any).msToBlob());
-          }
-        }
-
-        if (!blobCanvas.toBlob) {
-          return resolve(await dataUrlToBlob(
-              blobCanvas.toDataURL(mimeType, qualityArgument)));
-        }
 
         blobCanvas.toBlob((blob) => {
           if (!blob) {
@@ -478,6 +474,27 @@ export default class ModelViewerElementBase extends ReactiveElement {
     } finally {
       this[$updateSize]({width, height});
     };
+  }
+
+  /**
+   * Registers a new EffectComposer as the main rendering pipeline,
+   * instead of the default ThreeJs renderer.
+   * This method also calls setRenderer, setMainScene, and setMainCamera on
+   * your effectComposer.
+   * @param effectComposer An EffectComposer from `pmndrs/postprocessing`
+   */
+  registerEffectComposer(effectComposer: EffectComposerInterface) {
+    effectComposer.setRenderer(this[$renderer].threeRenderer);
+    effectComposer.setMainCamera(this[$scene].getCamera());
+    effectComposer.setMainScene(this[$scene]);
+    this[$scene].effectRenderer = effectComposer;
+  }
+
+  /**
+   * Removes the registered EffectComposer
+   */
+  unregisterEffectComposer() {
+    this[$scene].effectRenderer = null;
   }
 
   registerRenderer(renderer: RendererInterface) {
@@ -527,7 +544,8 @@ export default class ModelViewerElementBase extends ReactiveElement {
     this[$onResize]({width, height});
   }
 
-  [$tick](_time: number, _delta: number) {
+  [$tick](time: number, delta: number) {
+    this[$scene].effectRenderer?.beforeRender(time, delta);
   }
 
   [$markLoaded]() {
@@ -609,6 +627,10 @@ export default class ModelViewerElementBase extends ReactiveElement {
 
       this[$markLoaded]();
       this[$onModelLoad]();
+
+      this.updateComplete.then(() => {
+        this.dispatchEvent(new CustomEvent('before-render'));
+      });
 
       // Wait for shaders to compile and pixels to be drawn.
       await new Promise<void>(resolve => {

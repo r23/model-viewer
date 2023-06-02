@@ -13,15 +13,15 @@
  * limitations under the License.
  */
 
-const {nodeResolve: resolve} = require('@rollup/plugin-node-resolve');
+const { nodeResolve: resolve } = require('@rollup/plugin-node-resolve');
 const replace = require('@rollup/plugin-replace');
 const cleanup = require('rollup-plugin-cleanup');
-const {terser} = require('rollup-plugin-terser');
+const { terser } = require('rollup-plugin-terser');
 const commonjs = require('@rollup/plugin-commonjs');
 const polyfill = require('rollup-plugin-polyfill');
 import dts from 'rollup-plugin-dts';
 
-const {NODE_ENV} = process.env;
+const { NODE_ENV } = process.env;
 
 const onwarn = (warning, warn) => {
   // Suppress non-actionable warning caused by TypeScript boilerplate:
@@ -30,25 +30,44 @@ const onwarn = (warning, warn) => {
   }
 };
 
-let plugins =
-    [resolve({dedupe: ['three']}), replace({'Reflect.decorate': 'undefined'})];
+let plugins = [resolve({ dedupe: 'three' }), replace({ 'Reflect.decorate': 'undefined' })];
 
 const watchFiles = ['lib/**'];
 
-const outputOptions = [{
-  input: './lib/model-viewer.js',
-  output: {
-    file: './dist/model-viewer.js',
-    sourcemap: true,
-    format: 'esm',
-    name: 'ModelViewerElement'
+const outputOptions = [
+  {
+    input: './lib/model-viewer.js',
+    output: {
+      file: './dist/model-viewer.js',
+      sourcemap: true,
+      format: 'esm',
+      name: 'ModelViewerElement',
+    },
+    watch: {
+      include: watchFiles,
+    },
+    plugins,
+    onwarn,
   },
-  watch: {
-    include: watchFiles,
-  },
-  plugins,
-  onwarn,
-}];
+  {
+    input: './lib/model-viewer.js',
+    output: {
+      file: './dist/model-viewer-module.js',
+      sourcemap: true,
+      format: 'esm',
+      name: 'ModelViewerElement',
+      globals: {
+        'three': 'three',
+      },
+    },
+    external: ['three'],
+    watch: {
+      include: watchFiles,
+    },
+    plugins,
+    onwarn,
+  }
+];
 
 if (NODE_ENV !== 'development') {
   const pluginsIE11 = [
@@ -60,7 +79,7 @@ if (NODE_ENV !== 'development') {
       // ~45kb in filesize alone... but takes 2 minutes to build
       include: ['lib/**'],
       comments: 'none',
-    })
+    }),
   ];
 
   // IE11 does not support modules, so they are removed here, as well as in a
@@ -71,7 +90,7 @@ if (NODE_ENV !== 'development') {
       file: './dist/model-viewer-umd.js',
       sourcemap: true,
       format: 'umd',
-      name: 'ModelViewerElement'
+      name: 'ModelViewerElement',
     },
     watch: {
       include: watchFiles,
@@ -80,10 +99,31 @@ if (NODE_ENV !== 'development') {
     onwarn,
   });
 
-  plugins = [
-    ...plugins,
-    terser(),
-  ];
+  /** Bundled w/o three */
+
+  // IE11 does not support modules, so they are removed here, as well as in a
+  // dedicated unit test build which is needed for the same reason.
+  outputOptions.push({
+    input: './lib/model-viewer.js',
+    output: {
+      file: './dist/model-viewer-module-umd.js',
+      sourcemap: true,
+      format: 'umd',
+      name: 'ModelViewerElement',
+      globals: {
+        'three': 'three',
+      },
+    },
+    external: ['three'],
+    watch: {
+      include: watchFiles,
+    },
+    plugins: pluginsIE11,
+    onwarn,
+  });
+
+  // Minified Versions
+  plugins = [...plugins, terser()];
 
   outputOptions.push({
     input: './dist/model-viewer.js',
@@ -91,7 +131,7 @@ if (NODE_ENV !== 'development') {
       file: './dist/model-viewer.min.js',
       sourcemap: true,
       format: 'esm',
-      name: 'ModelViewerElement'
+      name: 'ModelViewerElement',
     },
     watch: {
       include: watchFiles,
@@ -106,8 +146,46 @@ if (NODE_ENV !== 'development') {
       file: './dist/model-viewer-umd.min.js',
       sourcemap: true,
       format: 'umd',
-      name: 'ModelViewerElement'
+      name: 'ModelViewerElement',
     },
+    watch: {
+      include: watchFiles,
+    },
+    plugins,
+    onwarn,
+  });
+
+  outputOptions.push({
+    input: './dist/model-viewer-module.js',
+    output: {
+      file: './dist/model-viewer-module.min.js',
+      sourcemap: true,
+      format: 'esm',
+      name: 'ModelViewerElement',
+      globals: {
+        'three': 'three',
+      },
+    },
+    external: ['three'],
+    watch: {
+      include: watchFiles,
+    },
+    plugins,
+    onwarn,
+  });
+
+  outputOptions.push({
+    input: './dist/model-viewer-module-umd.js',
+    output: {
+      file: './dist/model-viewer-module-umd.min.js',
+      sourcemap: true,
+      format: 'umd',
+      name: 'ModelViewerElement',
+      globals: {
+        'three': 'three',
+      },
+    },
+    external: ['three'],
     watch: {
       include: watchFiles,
     },
@@ -120,9 +198,9 @@ if (NODE_ENV !== 'development') {
     output: {
       file: './dist/model-viewer.d.ts',
       format: 'esm',
-      name: 'ModelViewerElement'
+      name: 'ModelViewerElement',
     },
-    plugins: [dts()]
+    plugins: [dts()],
   });
 }
 

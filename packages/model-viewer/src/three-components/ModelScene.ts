@@ -13,14 +13,14 @@
  * limitations under the License.
  */
 
-import {AnimationAction, AnimationClip, AnimationMixer, Box3, Camera, Euler, Event as ThreeEvent, LoopPingPong, LoopRepeat, Material, Matrix3, Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Sphere, Texture, Triangle, Vector2, Vector3, WebGLRenderer} from 'three';
+import {AnimationAction, AnimationActionLoopStyles, AnimationClip, AnimationMixer, Box3, Camera, Euler, Event as ThreeEvent, LoopPingPong, LoopRepeat, Material, Matrix3, Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Sphere, Texture, Triangle, Vector2, Vector3, WebGLRenderer} from 'three';
 import {CSS2DRenderer} from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 // @ts-ignore
 import {reduceVertices} from 'three/examples/jsm/utils/SceneUtils.js';
 
 import {$currentGLTF, $model, $originalGltfJson} from '../features/scene-graph.js';
 import {$nodeFromIndex, $nodeFromPoint} from '../features/scene-graph/model.js';
-import ModelViewerElementBase, {$renderer, RendererInterface} from '../model-viewer-base.js';
+import ModelViewerElementBase, {$renderer, EffectComposerInterface, RendererInterface} from '../model-viewer-base.js';
 import {ModelViewerElement} from '../model-viewer.js';
 import {normalizeUnit} from '../styles/conversions.js';
 import {NumberNode, parseExpressions} from '../styles/parsers.js';
@@ -68,6 +68,7 @@ export class ModelScene extends Scene {
   public element: ModelViewerElement;
   public canvas: HTMLCanvasElement;
   public annotationRenderer = new CSS2DRenderer();
+  public effectRenderer: EffectComposerInterface|null = null;
   public schemaElement = document.createElement('script');
   public width = 1;
   public height = 1;
@@ -357,7 +358,7 @@ export class ModelScene extends Scene {
 
     group.traverse((object: Object3D) => {
       const mesh = object as Mesh;
-      if (!mesh.isMesh) {
+      if (!mesh.material) {
         return;
       }
       const material = mesh.material as Material;
@@ -663,14 +664,13 @@ export class ModelScene extends Scene {
    */
   playAnimation(
       name: string|null = null, crossfadeTime: number = 0,
-      loopMode: number = LoopRepeat, repetitionCount: number = Infinity) {
+      loopMode: AnimationActionLoopStyles = LoopRepeat,
+      repetitionCount: number = Infinity) {
     if (this._currentGLTF == null) {
       return;
     }
     const {animations} = this;
     if (animations == null || animations.length === 0) {
-      console.warn(
-          `Cannot play animation (model does not have any animations)`);
       return;
     }
 
@@ -809,13 +809,9 @@ export class ModelScene extends Scene {
     }
   }
 
-  get raycaster() {
-    return raycaster;
-  }
-
   hitFromPoint(ndcPosition: Vector2, object: Object3D = this) {
-    this.raycaster.setFromCamera(ndcPosition, this.getCamera());
-    const hits = this.raycaster.intersectObject(object, true);
+    raycaster.setFromCamera(ndcPosition, this.getCamera());
+    const hits = raycaster.intersectObject(object, true);
 
     return hits.find(
         (hit) => hit.object.visible && !hit.object.userData.shadow);
@@ -830,18 +826,18 @@ export class ModelScene extends Scene {
   positionAndNormalFromPoint(ndcPosition: Vector2, object: Object3D = this):
       {position: Vector3, normal: Vector3, uv: Vector2|null}|null {
     const hit = this.hitFromPoint(ndcPosition, object);
-    if (hit == null || hit.face == null) {
+    if (hit == null) {
       return null;
     }
 
-    if (hit.uv == null) {
-      return {position: hit.point, normal: hit.face.normal, uv: null};
-    }
+    const position = hit.point;
+    const normal = hit.face != null ?
+        hit.face.normal.clone().applyNormalMatrix(
+            new Matrix3().getNormalMatrix(hit.object.matrixWorld)) :
+        raycaster.ray.direction.clone().multiplyScalar(-1);
+    const uv = hit.uv ?? null;
 
-    hit.face.normal.applyNormalMatrix(
-        new Matrix3().getNormalMatrix(hit.object.matrixWorld));
-
-    return {position: hit.point, normal: hit.face.normal, uv: hit.uv};
+    return {position, normal, uv};
   }
 
   /**

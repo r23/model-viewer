@@ -578,6 +578,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
 
       let startTime = performance.now();
       const {width, height} = this[$scene];
+      const rect = this.getBoundingClientRect();
 
       const dispatchTouches = (type: string) => {
         for (const [i, position] of positions.entries()) {
@@ -594,8 +595,8 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
             pointerId: i - 5678,  // help ensure uniqueness
             pointerType: 'touch',
             target: inputElement,
-            clientX: width * position.x,
-            clientY: height * position.y,
+            clientX: width * position.x + rect.x,
+            clientY: height * position.y + rect.y,
             altKey: true  // flag that this is not a user interaction
           } as PointerEventInit;
 
@@ -786,7 +787,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
           Math.max(this[$scene].boundingSphere.radius, radius);
 
       const near = 0;
-      const far = 2 * maximumRadius;
+      const far = Math.abs(2 * maximumRadius);
       this[$controls].updateNearFar(near, far);
     }
 
@@ -808,7 +809,7 @@ export const ControlsMixin = <T extends Constructor<ModelViewerElementBase>>(
     }
 
     get[$ariaLabel]() {
-      return super[$ariaLabel] +
+      return super[$ariaLabel].replace(/\.$/, '') +
           (this.cameraControls ? INTERACTION_PROMPT : '');
     }
 

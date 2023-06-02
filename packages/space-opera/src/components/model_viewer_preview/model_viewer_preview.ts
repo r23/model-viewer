@@ -44,7 +44,7 @@ import {createSafeObjectUrlFromArrayBuffer} from '../utils/create_object_url.js'
 import {styles as hotspotStyles} from '../utils/hotspot/hotspot.css.js';
 import {renderModelViewer} from '../utils/render_model_viewer.js';
 
-import {dispatchGltfUrl, dispatchModel, getGltfUrl, renderCommonChildElements} from './reducer.js';
+import {dispatchGltfUrl, dispatchModel, getGltfUrl, getModelViewer, renderCommonChildElements} from './reducer.js';
 
 /**
  * Renders and updates the model-viewer tag, serving as a preview of the edits.
@@ -92,7 +92,7 @@ export class ModelViewerPreview extends ConnectedLitElement {
     this.addEventListener('dragover', this.onDragover);
     (self as any).ModelViewerElement = (self as any).ModelViewerElement || {};
     (self as any).ModelViewerElement.meshoptDecoderLocation =
-        'https://unpkg.com/meshoptimizer/meshopt_decoder.js';
+        'https://cdn.jsdelivr.net/npm/meshoptimizer/meshopt_decoder.js';
   }
 
   forcePost() {
@@ -167,16 +167,30 @@ export class ModelViewerPreview extends ConnectedLitElement {
   }
 
   private addHotspot(event: MouseEvent) {
-    const surface =
-        this.modelViewer.surfaceFromPoint(event.clientX, event.clientY);
-    if (!surface) {
-          console.log('Click was not on model, no hotspot added.');
-          return;
+    if (getModelViewer().availableAnimations.length > 0) {
+          const surface =
+              this.modelViewer.surfaceFromPoint(event.clientX, event.clientY);
+          if (!surface) {
+            console.log('Click was not on model, no hotspot added.');
+            return;
+          }
+          reduxStore.dispatch(dispatchAddHotspot({
+            name: generateUniqueHotspotName(),
+            surface,
+          }));
+    } else {
+          const point = this.modelViewer.positionAndNormalFromPoint(
+              event.clientX, event.clientY);
+          if (!point) {
+            console.log('Click was not on model, no hotspot added.');
+            return;
+          }
+          reduxStore.dispatch(dispatchAddHotspot({
+            name: generateUniqueHotspotName(),
+            position: point.position.toString(),
+            normal: point.normal.toString()
+          }));
     }
-    reduxStore.dispatch(dispatchAddHotspot({
-      name: generateUniqueHotspotName(),
-      surface,
-    }));
     reduxStore.dispatch(dispatchUpdateHotspotMode(false));
   }
 

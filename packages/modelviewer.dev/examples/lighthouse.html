@@ -23,6 +23,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="shortcut icon" type="image/png" href="../assets/favicon.png"/>
   <link type="text/css" href="../styles/examples.css" rel="stylesheet" />
+  <script defer src="https://web3dsurvey.com/collector.js"></script>
   <script>
     window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
     ga('create', 'UA-169901325-1', { 'storage': 'none' });
@@ -33,9 +34,6 @@
   <script async src='https://www.google-analytics.com/analytics.js'></script>
   <script type="application/ld+json">
     {"@context":"http://schema.org/","@type":"3DModel","image":"../assets/ShopifyModels/ChairPoster.webp","name":"3D model of a chair with footrest","encoding":[{"@type":"MediaObject","contentUrl":"../assets/ShopifyModels/Chair.glb","encodingFormat":"model/gltf-binary"}]}
-  </script>
-  <script type="application/ld+json">
-    {"@context":"http://schema.org/","@type":"3DModel","image":"../assets/ShopifyModels/MixerPoster.webp","name":"3D model of a countertop mixer","encoding":[{"@type":"MediaObject","contentUrl":"../assets/ShopifyModels/Mixer.glb","encodingFormat":"model/gltf-binary"}]}
   </script>
    <style>
     html {
@@ -368,10 +366,6 @@
       modelViewer.type = 'module';
       modelViewer.src = '../node_modules/@google/model-viewer/dist/model-viewer.js'; 
       body.appendChild(modelViewer);
-
-      const focusVisible = document.createElement('script');
-      focusVisible.src = '../node_modules/focus-visible/dist/focus-visible.js'; 
-      body.appendChild(focusVisible);
     };
 
     body.addEventListener('mouseover', onInteraction, {once:true});

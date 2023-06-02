@@ -1,11 +1,11 @@
 **/node_modules
+scripts/**/*.js
 packages/*/dist
 packages/**/*.d.ts
 packages/*/src/*-css.ts
 
-packages/*/karma.*.js
-
 packages/model-viewer/**/*
+packages/model-viewer-effects/**/*
 packages/modelviewer.dev/**/*
 packages/render-fidelity-tools/**/*
 packages/shared-assets/**/*

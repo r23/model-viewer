@@ -143,11 +143,11 @@ export class Renderer extends EventDispatcher {
         alpha: true,
         antialias: true,
         powerPreference: options.powerPreference as WebGLPowerPreference,
-        preserveDrawingBuffer: true
+        preserveDrawingBuffer: true,
       });
       this.threeRenderer.autoClear = true;
       this.threeRenderer.outputEncoding = sRGBEncoding;
-      this.threeRenderer.physicallyCorrectLights = true;
+      this.threeRenderer.useLegacyLights = false;
       this.threeRenderer.setPixelRatio(1);  // handle pixel ratio externally
 
       this.debugger = !!options.debug ? new Debugger(this) : null;
@@ -291,6 +291,7 @@ export class Renderer extends EventDispatcher {
       canvas.width = width;
       canvas.height = height;
       scene.forceRescale();
+      scene.effectRenderer?.setSize(width, height);
     }
   }
 
@@ -491,15 +492,19 @@ export class Renderer extends EventDispatcher {
       this.threeRenderer.setRenderTarget(null);
       this.threeRenderer.setViewport(
           0, Math.ceil(this.height * this.dpr) - height, width, height);
-      this.threeRenderer.render(scene, scene.camera);
-
-      if (this.multipleScenesVisible || scene.renderCount === 0) {
-        this.copyPixels(scene, width, height);
+      if (scene.effectRenderer != null) {
+        scene.effectRenderer.render(delta);
       } else {
-        if (canvas3D.parentElement !== scene.canvas.parentElement) {
-          scene.canvas.parentElement!.appendChild(canvas3D);
-          scene.canvas.classList.remove('show');
-        }
+        this.threeRenderer.autoClear =
+            true;  // this might get reset by the effectRenderer
+        this.threeRenderer.render(scene, scene.camera);
+      }
+      if (this.multipleScenesVisible ||
+          (!scene.element.modelIsVisible && scene.renderCount === 0)) {
+        this.copyPixels(scene, width, height);
+      } else if (canvas3D.parentElement !== scene.canvas.parentElement) {
+        scene.canvas.parentElement!.appendChild(canvas3D);
+        scene.canvas.classList.remove('show');
       }
 
       scene.hasRendered();
