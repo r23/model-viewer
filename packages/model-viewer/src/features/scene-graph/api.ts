@@ -117,6 +117,61 @@ export declare interface Material {
   getAlphaMode(): AlphaMode;
 
   /**
+   * PBR Next properties.
+   */
+  readonly emissiveStrength: number;
+  readonly clearcoatFactor: number;
+  readonly clearcoatRoughnessFactor: number;
+  readonly clearcoatTexture: TextureInfo;
+  readonly clearcoatRoughnessTexture: TextureInfo;
+  readonly clearcoatNormalTexture: TextureInfo;
+  readonly clearcoatNormalScale: number;
+  readonly ior: number;
+  readonly sheenColorFactor: Readonly<RGB>;
+  readonly sheenColorTexture: TextureInfo;
+  readonly sheenRoughnessFactor: number;
+  readonly sheenRoughnessTexture: TextureInfo;
+  readonly transmissionFactor: number;
+  readonly transmissionTexture: TextureInfo;
+  readonly thicknessFactor: number;
+  readonly thicknessTexture: TextureInfo;
+  readonly attenuationDistance: number;
+  readonly attenuationColor: Readonly<RGB>;
+  readonly specularFactor: number;
+  readonly specularTexture: TextureInfo;
+  readonly specularColorFactor: Readonly<RGB>;
+  readonly specularColorTexture: TextureInfo;
+  readonly iridescenceFactor: number;
+  readonly iridescenceTexture: TextureInfo;
+  readonly iridescenceIor: number;
+  readonly iridescenceThicknessMinimum: number;
+  readonly iridescenceThicknessMaximum: number;
+  readonly iridescenceThicknessTexture: TextureInfo;
+  readonly anisotropyStrength: number;
+  readonly anisotropyRotation: number;
+  readonly anisotropyTexture: TextureInfo;
+
+  setEmissiveStrength(emissiveStrength: number): void;
+  setClearcoatFactor(clearcoatFactor: number): void;
+  setClearcoatRoughnessFactor(clearcoatRoughnessFactor: number): void;
+  setClearcoatNormalScale(clearcoatNormalScale: number): void;
+  setIor(ior: number): void;
+  setSheenColorFactor(rgb: RGB|string): void;
+  setSheenRoughnessFactor(roughness: number): void;
+  setTransmissionFactor(transmission: number): void;
+  setThicknessFactor(thickness: number): void;
+  setAttenuationDistance(attenuationDistance: number): void;
+  setAttenuationColor(rgb: RGB|string): void;
+  setSpecularFactor(specularFactor: number): void;
+  setSpecularColorFactor(rgb: RGB|string): void;
+  setIridescenceFactor(iridescence: number): void;
+  setIridescenceIor(ior: number): void;
+  setIridescenceThicknessMinimum(thicknessMin: number): void;
+  setIridescenceThicknessMaximum(thicknessMax: number): void;
+  setAnisotropyStrength(strength: number): void;
+  setAnisotropyRotation(rotation: number): void;
+
+  /**
    * The PBRMetallicRoughness configuration of the material.
    */
   readonly pbrMetallicRoughness: PBRMetallicRoughness;
