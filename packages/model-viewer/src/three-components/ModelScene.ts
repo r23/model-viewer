@@ -13,12 +13,10 @@
  * limitations under the License.
  */
 
-import {AnimationAction, AnimationActionLoopStyles, AnimationClip, AnimationMixer, Box3, Camera, Euler, Event as ThreeEvent, LoopPingPong, LoopRepeat, Material, Matrix3, Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Sphere, Texture, Triangle, Vector2, Vector3, WebGLRenderer} from 'three';
+import {ACESFilmicToneMapping, AnimationAction, AnimationActionLoopStyles, AnimationClip, AnimationMixer, Box3, Camera, Euler, Event as ThreeEvent, LoopPingPong, LoopRepeat, Material, Matrix3, Mesh, Object3D, PerspectiveCamera, Raycaster, Scene, Sphere, Texture, ToneMapping, Triangle, Vector2, Vector3, WebGLRenderer} from 'three';
 import {CSS2DRenderer} from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-// @ts-ignore
 import {reduceVertices} from 'three/examples/jsm/utils/SceneUtils.js';
 
-import {ToneMappingValue} from '../features/environment.js';
 import {$currentGLTF, $model, $originalGltfJson} from '../features/scene-graph.js';
 import {$nodeFromIndex, $nodeFromPoint} from '../features/scene-graph/model.js';
 import ModelViewerElementBase, {$renderer, EffectComposerInterface, RendererInterface} from '../model-viewer-base.js';
@@ -29,9 +27,11 @@ import {resolveDpr} from '../utilities.js';
 
 import {Damper, SETTLING_TIME} from './Damper.js';
 import {ModelViewerGLTFInstance} from './gltf-instance/ModelViewerGLTFInstance.js';
+import {GroundedSkybox} from './GroundedSkybox.js';
 import {Hotspot} from './Hotspot.js';
 import {Shadow} from './Shadow.js';
 
+export const GROUNDED_SKYBOX_SIZE = 10;
 const MIN_SHADOW_RATIO = 100;
 
 export interface ModelLoadEvent extends ThreeEvent {
@@ -98,7 +98,7 @@ export class ModelScene extends Scene {
   public bakedShadows = new Set<Mesh>();
 
   public exposure = 1;
-  public toneMapping: ToneMappingValue = 'auto';
+  public toneMapping: ToneMapping = ACESFilmicToneMapping;
   public canScale = true;
 
   private isDirty = false;
@@ -114,6 +114,8 @@ export class ModelScene extends Scene {
   private cancelPendingSourceChange: (() => void)|null = null;
   private animationsByName: Map<string, AnimationClip> = new Map();
   private currentAnimationAction: AnimationAction|null = null;
+
+  private groundedSkybox = new GroundedSkybox();
 
   constructor({canvas, element, width, height}: ModelSceneConfig) {
     super();
@@ -275,6 +277,8 @@ export class ModelScene extends Scene {
 
     this.updateShadow();
     this.setShadowIntensity(this.shadowIntensity);
+
+    this.setGroundedSkybox();
   }
 
   reset() {
@@ -344,12 +348,12 @@ export class ModelScene extends Scene {
   }
 
   markBakedShadow(mesh: Mesh) {
-    mesh.userData.shadow = true;
+    mesh.userData.noHit = true;
     this.bakedShadows.add(mesh);
   }
 
   unmarkBakedShadow(mesh: Mesh) {
-    mesh.userData.shadow = false;
+    mesh.userData.noHit = false;
     mesh.visible = true;
     this.bakedShadows.delete(mesh);
     this.boundingBox.expandByObject(mesh);
@@ -536,8 +540,37 @@ export class ModelScene extends Scene {
       return;
     }
     this.environment = environment;
-    this.background = skybox;
+    this.setBackground(skybox);
     this.queueRender();
+  }
+
+  setBackground(skybox: Texture|null) {
+    this.groundedSkybox.map = skybox;
+    if (this.groundedSkybox.isUsable()) {
+      this.target.add(this.groundedSkybox);
+      this.background = null;
+    } else {
+      this.target.remove(this.groundedSkybox);
+      this.background = skybox;
+    }
+  }
+
+  farRadius() {
+    return this.boundingSphere.radius *
+        (this.groundedSkybox.parent != null ? GROUNDED_SKYBOX_SIZE : 1);
+  }
+
+  setGroundedSkybox() {
+    const heightNode =
+        parseExpressions(this.element.skyboxHeight)[0].terms[0] as NumberNode;
+    const height = normalizeUnit(heightNode).number;
+    const radius = GROUNDED_SKYBOX_SIZE * this.boundingSphere.radius;
+
+    this.groundedSkybox.updateGeometry(height, radius);
+    this.groundedSkybox.position.y =
+        height - (this.shadow ? 2 * this.shadow.gap() : 0);
+
+    this.setBackground(this.groundedSkybox.map);
   }
 
   /**
@@ -815,8 +848,7 @@ export class ModelScene extends Scene {
     raycaster.setFromCamera(ndcPosition, this.getCamera());
     const hits = raycaster.intersectObject(object, true);
 
-    return hits.find(
-        (hit) => hit.object.visible && !hit.object.userData.shadow);
+    return hits.find((hit) => hit.object.visible && !hit.object.userData.noHit);
   }
 
   /**

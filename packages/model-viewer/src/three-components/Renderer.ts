@@ -45,6 +45,7 @@ const SCALE_STEPS = [1, 0.79, 0.62, 0.5, 0.4, 0.31, 0.25];
 const DEFAULT_LAST_STEP = 3;
 
 export const DEFAULT_POWER_PREFERENCE: string = 'high-performance';
+const COMMERCE_EXPOSURE = 1.3;
 
 /**
  * Registers canvases with Canvas2DRenderingContexts and renders them
@@ -140,23 +141,23 @@ export class Renderer extends
     ShaderChunk.tonemapping_pars_fragment =
         ShaderChunk.tonemapping_pars_fragment.replace(
             'vec3 CustomToneMapping( vec3 color ) { return color; }', `
-      float startCompression = 0.8;
-      float desaturation = 0.5;
+      float startCompression = 0.8 - 0.04;
+      float desaturation = 0.15;
       vec3 CustomToneMapping( vec3 color ) {
         color *= toneMappingExposure;
-        
-        float d = 1. - startCompression;
+
+        float x = min(color.r, min(color.g, color.b));
+        float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+        color -= offset;
 
         float peak = max(color.r, max(color.g, color.b));
         if (peak < startCompression) return color;
 
+        float d = 1. - startCompression;
         float newPeak = 1. - d * d / (peak + d - startCompression);
-        float invPeak = 1. / peak;
-        
-        float extraBrightness = dot(color * (1. - startCompression * invPeak), vec3(1, 1, 1));
-        
-        color *= newPeak * invPeak;
-        float g = 1. - 3. / (desaturation * extraBrightness + 3.);
+        color *= newPeak / peak;
+
+        float g = 1. - 1. / (desaturation * (peak - newPeak) + 1.);
         return mix(color, vec3(1, 1, 1), g);
       }`);
 
@@ -427,13 +428,19 @@ export class Renderer extends
    * the time that has passed since the last rendered frame.
    */
   preRender(scene: ModelScene, t: number, delta: number) {
-    const {element, exposure} = scene;
+    const {element, exposure, toneMapping} = scene;
 
     element[$tick](t, delta);
 
     const exposureIsNumber =
         typeof exposure === 'number' && !Number.isNaN(exposure);
-    this.threeRenderer.toneMappingExposure = exposureIsNumber ? exposure : 1.0;
+    const env = element.environmentImage;
+    const sky = element.skyboxImage;
+    const compensateExposure = toneMapping === CustomToneMapping &&
+        (env === 'neutral' || env === 'legacy' || (!env && !sky));
+    this.threeRenderer.toneMappingExposure =
+        (exposureIsNumber ? exposure : 1.0) *
+        (compensateExposure ? COMMERCE_EXPOSURE : 1.0);
   }
 
   render(t: number, frame?: XRFrame) {
@@ -512,9 +519,7 @@ export class Renderer extends
       } else {
         this.threeRenderer.autoClear =
             true;  // this might get reset by the effectRenderer
-        this.threeRenderer.toneMapping = scene.toneMapping === 'commerce' ?
-            CustomToneMapping :
-            ACESFilmicToneMapping;
+        this.threeRenderer.toneMapping = scene.toneMapping;
         this.threeRenderer.render(scene, scene.camera);
       }
       if (this.multipleScenesVisible ||

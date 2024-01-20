@@ -248,7 +248,7 @@
       {
         "name": "progress",
         "htmlName": "progress",
-        "description": "This event fires while a model, environment, and/or skybox is loading, during both download and processing. The progress of all of these concurrent tasks will be given by a value between 0 and 1: event.detail.totalProgress."
+        "description": "This event fires while a model, environment, skybox, variant, and/or a usdz conversion is loading, during both download and processing. The progress of all of these concurrent tasks will be given by a value between 0 and 1: event.detail.totalProgress. It also provides the reason why the event is fired ('model-load', 'environment-update', 'variant-update', 'usdz-conversion'): event.detail.reason."
       },
       {
         "name": "render-scale",
@@ -841,10 +841,22 @@
       {
         "name": "skybox-image",
         "htmlName": "skyboxImage",
-        "description": "Sets the background image of the scene. Takes a URL to an <a href=\"https://en.wikipedia.org/wiki/Equirectangular_projection\">equirectangular projection image</a> that's used for the skybox, as well as applied as an environment map on the model. Supports png, jpg and hdr (recommended) images.",
+        "description": "Sets the background image of the scene. Takes a URL to an <a href=\"https://en.wikipedia.org/wiki/Equirectangular_projection\">equirectangular projection image</a> that's used for the skybox, as well as applied as an environment map on the model. Supports png, hdr, and jpg (including UltraHDR) images. HDR images are strongly recommended to adequately represent lighting, and the UltraHDR JPEG format is particularly recommended for its high compression of HDR data - try it yourself using this free online <a href=\"https://gainmap-creator.monogrid.com\">converter</a>.",
         "links": [
           "<a href=\"../examples/lightingandenv/\">Related examples</a>"
         ]
+      },
+      {
+        "name": "skybox-height",
+        "htmlName": "skyboxHeight",
+        "description": "Causes the skybox to be projected onto the ground plane. The height indicates the camera's distance above the ground and acts to scale the image at ground level to the correct size. Accepts units in meters (\"m\"), centimeters (\"cm\"), or millimeters (\"mm\"). The default value of 0m disables ground projection.",
+        "links": [
+          "<a href=\"../examples/lightingandenv/#groundedSkybox\">Related examples</a>"
+        ],
+        "default": {
+          "default": "0m",
+          "options": "any positive value"
+        }
       },
       {
         "name": "environment-image",
@@ -868,6 +880,18 @@
         "default": {
           "default": "1",
           "options": "any positive value"
+        }
+      },
+      {
+        "name": "tone-mapping",
+        "htmlName": "toneMapping",
+        "description": "Selects the function that compresses the HDR rendering to an SDR image on your screen. ACES is a film industry standard that is commonly used, though it has serious color-accuracy problems. AgX is a new and improved tone mapper seeing broad adoption in film and games.Commerce is a function designed specifically for accurate color reproduction in e-commerce. Our current default is and has been ACES, but in v4.0 this default will change to Commerce.",
+        "links": [
+          "<a href=\"../examples/lightingandenv/#toneMapping\"><span class='attribute'>tone-mapping</span> example</a>"
+        ],
+        "default": {
+          "default": "aces",
+          "options": "aces, agx, commerce"
         }
       },
       {
